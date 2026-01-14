@@ -251,6 +251,21 @@
                   <i v-else class="fas fa-sort ml-1 text-gray-400" />
                 </th>
                 <th
+                  class="w-[100px] cursor-pointer px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600"
+                  @click="sortAccounts('status')"
+                >
+                  状态
+                  <i
+                    v-if="accountsSortBy === 'status'"
+                    :class="[
+                      'fas',
+                      accountsSortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down',
+                      'ml-1'
+                    ]"
+                  />
+                  <i v-else class="fas fa-sort ml-1 text-gray-400" />
+                </th>
+                <th
                   class="min-w-[80px] cursor-pointer px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600"
                   @click="sortAccounts('priority')"
                 >
@@ -266,19 +281,9 @@
                   <i v-else class="fas fa-sort ml-1 text-gray-400" />
                 </th>
                 <th
-                  class="w-[120px] min-w-[180px] max-w-[200px] cursor-pointer px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600"
-                  @click="sortAccounts('status')"
+                  class="min-w-[80px] px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300"
                 >
-                  状态
-                  <i
-                    v-if="accountsSortBy === 'status'"
-                    :class="[
-                      'fas',
-                      accountsSortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down',
-                      'ml-1'
-                    ]"
-                  />
-                  <i v-else class="fas fa-sort ml-1 text-gray-400" />
+                  最后使用
                 </th>
                 <th
                   class="min-w-[150px] px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300"
@@ -340,7 +345,7 @@
                               OpenAI
                             </div>
                             <div class="text-gray-200 dark:text-gray-600">
-                              进度条分别展示 5h 与周限窗口的额度使用比例，颜色含义与上方保持一致。
+                              进度条分别��示 5h 与周限窗口的额度使用比例，颜色含义与上方保持一致。
                             </div>
                             <div class="space-y-1 text-gray-200 dark:text-gray-600">
                               <div class="flex items-start gap-2">
@@ -409,11 +414,6 @@
                       />
                     </el-tooltip>
                   </div>
-                </th>
-                <th
-                  class="min-w-[80px] px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300"
-                >
-                  最后使用
                 </th>
                 <th
                   class="min-w-[110px] cursor-pointer px-3 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-600"
@@ -515,70 +515,6 @@
                   </div>
                 </td>
                 <td class="whitespace-nowrap px-3 py-4">
-                  <div
-                    v-if="
-                      account.platform === 'claude' ||
-                      account.platform === 'claude-console' ||
-                      account.platform === 'bedrock' ||
-                      account.platform === 'gemini' ||
-                      account.platform === 'openai' ||
-                      account.platform === 'openai-responses' ||
-                      account.platform === 'azure_openai' ||
-                      account.platform === 'ccr' ||
-                      account.platform === 'droid' ||
-                      account.platform === 'gemini-api'
-                    "
-                    class="flex items-center justify-center gap-2"
-                  >
-                    <!-- 减少按钮 -->
-                    <button
-                      class="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:bg-blue-500/20 dark:hover:text-blue-400 sm:h-6 sm:w-6"
-                      :disabled="isPriorityUpdating(account.id) || (account.priority || 50) <= 1"
-                      :title="
-                        isPriorityUpdating(account.id)
-                          ? '正在更新...'
-                          : (account.priority || 50) <= 1
-                            ? '已达到最小值'
-                            : '降低优先级 (-10)'
-                      "
-                      @click.stop="adjustPriority(account, -10)"
-                    >
-                      <i class="fas fa-minus text-xs" />
-                    </button>
-
-                    <!-- 优先级数字或Loading -->
-                    <span
-                      v-if="!isPriorityUpdating(account.id)"
-                      class="min-w-[28px] text-center text-sm font-bold text-gray-700 dark:text-gray-200"
-                    >
-                      {{ account.priority || 50 }}
-                    </span>
-                    <i
-                      v-else
-                      class="fas fa-spinner fa-spin min-w-[28px] text-center text-sm text-gray-500 dark:text-gray-400"
-                    />
-
-                    <!-- 增加按钮 -->
-                    <button
-                      class="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-green-300 hover:bg-green-50 hover:text-green-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-green-400 dark:hover:bg-green-500/20 dark:hover:text-green-400 sm:h-6 sm:w-6"
-                      :disabled="isPriorityUpdating(account.id) || (account.priority || 50) >= 100"
-                      :title="
-                        isPriorityUpdating(account.id)
-                          ? '正在更新...'
-                          : (account.priority || 50) >= 100
-                            ? '已达到最大值'
-                            : '提高优先级 (+10)'
-                      "
-                      @click.stop="adjustPriority(account, +10)"
-                    >
-                      <i class="fas fa-plus text-xs" />
-                    </button>
-                  </div>
-                  <div v-else class="text-sm text-gray-400">
-                    <span class="text-xs">N/A</span>
-                  </div>
-                </td>
-                <td class="w-[100px] min-w-[100px] max-w-[100px] whitespace-nowrap px-3 py-4">
                   <div class="flex flex-col gap-1">
                     <span
                       :class="[
@@ -667,6 +603,73 @@
                       绑定: {{ account.boundApiKeysCount || 0 }} 个API Key
                     </span>
                   </div>
+                </td>
+                <td class="whitespace-nowrap px-3 py-4">
+                  <div
+                    v-if="
+                      account.platform === 'claude' ||
+                      account.platform === 'claude-console' ||
+                      account.platform === 'bedrock' ||
+                      account.platform === 'gemini' ||
+                      account.platform === 'openai' ||
+                      account.platform === 'openai-responses' ||
+                      account.platform === 'azure_openai' ||
+                      account.platform === 'ccr' ||
+                      account.platform === 'droid' ||
+                      account.platform === 'gemini-api'
+                    "
+                    class="flex items-center justify-center gap-2"
+                  >
+                    <!-- 减少按钮 -->
+                    <button
+                      class="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:bg-blue-500/20 dark:hover:text-blue-400 sm:h-6 sm:w-6"
+                      :disabled="isPriorityUpdating(account.id) || (account.priority || 50) <= 1"
+                      :title="
+                        isPriorityUpdating(account.id)
+                          ? '正在更新...'
+                          : (account.priority || 50) <= 1
+                            ? '已达到最小值'
+                            : '降低优先级 (-10)'
+                      "
+                      @click.stop="adjustPriority(account, -10)"
+                    >
+                      <i class="fas fa-minus text-xs" />
+                    </button>
+
+                    <!-- 优先级数字或Loading -->
+                    <span
+                      v-if="!isPriorityUpdating(account.id)"
+                      class="min-w-[28px] text-center text-sm font-bold text-gray-700 dark:text-gray-200"
+                    >
+                      {{ account.priority || 50 }}
+                    </span>
+                    <i
+                      v-else
+                      class="fas fa-spinner fa-spin min-w-[28px] text-center text-sm text-gray-500 dark:text-gray-400"
+                    />
+
+                    <!-- 增加按钮 -->
+                    <button
+                      class="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-green-300 hover:bg-green-50 hover:text-green-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-green-400 dark:hover:bg-green-500/20 dark:hover:text-green-400 sm:h-6 sm:w-6"
+                      :disabled="isPriorityUpdating(account.id) || (account.priority || 50) >= 100"
+                      :title="
+                        isPriorityUpdating(account.id)
+                          ? '正在更新...'
+                          : (account.priority || 50) >= 100
+                            ? '已达到最大值'
+                            : '提高优先级 (+10)'
+                      "
+                      @click.stop="adjustPriority(account, +10)"
+                    >
+                      <i class="fas fa-plus text-xs" />
+                    </button>
+                  </div>
+                  <div v-else class="text-sm text-gray-400">
+                    <span class="text-xs">N/A</span>
+                  </div>
+                </td>
+                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-600 dark:text-gray-300">
+                  {{ formatLastUsed(account.lastUsedAt) }}
                 </td>
                 <td class="whitespace-nowrap px-3 py-4 text-sm">
                   <div v-if="account.usage && account.usage.daily" class="space-y-1">
@@ -1055,9 +1058,6 @@
                     <span class="text-xs">N/A</span>
                   </div>
                 </td>
-                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-600 dark:text-gray-300">
-                  {{ formatLastUsed(account.lastUsedAt) }}
-                </td>
                 <td class="whitespace-nowrap px-3 py-4">
                   <div class="flex flex-col gap-1">
                     <!-- 已设置过期时间 -->
@@ -1107,21 +1107,6 @@
                   <!-- 宽度足够时显示所有按钮 -->
                   <div v-if="!needsHorizontalScroll" class="flex items-center gap-1">
                     <button
-                      v-if="showResetButton(account)"
-                      :class="[
-                        'rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                        account.isResetting
-                          ? 'cursor-not-allowed bg-gray-100 text-gray-400'
-                          : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
-                      ]"
-                      :disabled="account.isResetting"
-                      :title="account.isResetting ? '重置中...' : '重置所有异常状态'"
-                      @click="resetAccountStatus(account)"
-                    >
-                      <i :class="['fas fa-redo', account.isResetting ? 'animate-spin' : '']" />
-                      <span class="ml-1">重置状态</span>
-                    </button>
-                    <button
                       v-if="canTestAccount(account)"
                       class="rounded bg-cyan-100 px-2.5 py-1 text-xs font-medium text-cyan-700 transition-colors hover:bg-cyan-200 dark:bg-cyan-900/40 dark:text-cyan-300 dark:hover:bg-cyan-800/50"
                       title="测试账户连通性"
@@ -1138,6 +1123,21 @@
                     >
                       <i class="fas fa-clock" />
                       <span class="ml-1">定时</span>
+                    </button>
+                    <button
+                      v-if="showResetButton(account)"
+                      :class="[
+                        'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                        account.isResetting
+                          ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+                          : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                      ]"
+                      :disabled="account.isResetting"
+                      :title="account.isResetting ? '重置中...' : '重置所有异常状态'"
+                      @click="resetAccountStatus(account)"
+                    >
+                      <i :class="['fas fa-redo', account.isResetting ? 'animate-spin' : '']" />
+                      <span class="ml-1">重置状态</span>
                     </button>
                     <button
                       :class="[
@@ -2558,6 +2558,46 @@ const sortedAccounts = computed(() => {
   if (!accountsSortBy.value) return sourceAccounts
 
   const sorted = [...sourceAccounts].sort((a, b) => {
+    // 先按状态排序（正常 > 限流 > 不可调度 > 其他）
+    const aIsRateLimited = isAccountRateLimited(a)
+    const bIsRateLimited = isAccountRateLimited(b)
+    const aIsBlocked = a.status === 'blocked' || a.status === 'unauthorized'
+    const bIsBlocked = b.status === 'blocked' || b.status === 'unauthorized'
+
+    // 计算状态优先级（数字越小优先级越高）
+    const getStatusPriority = (account, isRateLimited, isBlocked) => {
+      if (account.isActive && !isRateLimited && !isBlocked && account.schedulable !== false) {
+        return 1 // 正常
+      } else if (account.isActive && isRateLimited) {
+        return 2 // 限流
+      } else if (
+        account.isActive &&
+        !isRateLimited &&
+        !isBlocked &&
+        account.schedulable === false
+      ) {
+        return 3 // 不可调度
+      } else {
+        return 4 // 其他
+      }
+    }
+
+    const aStatusPriority = getStatusPriority(a, aIsRateLimited, aIsBlocked)
+    const bStatusPriority = getStatusPriority(b, bIsRateLimited, bIsBlocked)
+
+    // 如果状态优先级不同，按状态排序
+    if (aStatusPriority !== bStatusPriority) {
+      return aStatusPriority - bStatusPriority
+    }
+
+    // 状态相同时，再按优先级排序（优先级小的在前面）
+    const aPriority = a.priority || 50
+    const bPriority = b.priority || 50
+    if (aPriority !== bPriority) {
+      return aPriority - bPriority
+    }
+
+    // 如果优先级也相同，再按用户选择的排序字段排序
     let aVal = a[accountsSortBy.value]
     let bVal = b[accountsSortBy.value]
 
@@ -2587,8 +2627,6 @@ const sortedAccounts = computed(() => {
 
     // 处理限流时间排序: 未限流优先，然后按剩余时间从小到大
     if (accountsSortBy.value === 'rateLimitTime') {
-      const aIsRateLimited = isAccountRateLimited(a)
-      const bIsRateLimited = isAccountRateLimited(b)
       const aMinutes = aIsRateLimited ? getRateLimitRemainingMinutes(a) : 0
       const bMinutes = bIsRateLimited ? getRateLimitRemainingMinutes(b) : 0
 
