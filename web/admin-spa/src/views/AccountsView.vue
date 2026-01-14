@@ -528,17 +528,51 @@
                       account.platform === 'droid' ||
                       account.platform === 'gemini-api'
                     "
-                    class="flex items-center gap-2"
+                    class="flex items-center justify-center gap-2"
                   >
-                    <div class="h-2 w-16 rounded-full bg-gray-200">
-                      <div
-                        class="h-2 rounded-full bg-gradient-to-r from-green-500 to-blue-600 transition-all duration-300"
-                        :style="{ width: 101 - (account.priority || 50) + '%' }"
-                      />
-                    </div>
-                    <span class="min-w-[20px] text-xs font-medium text-gray-700 dark:text-gray-200">
+                    <!-- 减少按钮 -->
+                    <button
+                      :disabled="isPriorityUpdating(account.id) || (account.priority || 50) <= 1"
+                      :title="
+                        isPriorityUpdating(account.id)
+                          ? '正在更新...'
+                          : (account.priority || 50) <= 1
+                            ? '已达到最小值'
+                            : '降低优先级 (-10)'
+                      "
+                      class="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:bg-blue-500/20 dark:hover:text-blue-400 sm:h-6 sm:w-6"
+                      @click.stop="adjustPriority(account, -10)"
+                    >
+                      <i class="fas fa-minus text-xs" />
+                    </button>
+
+                    <!-- 优先级数字或Loading -->
+                    <span
+                      v-if="!isPriorityUpdating(account.id)"
+                      class="min-w-[28px] text-center text-sm font-bold text-gray-700 dark:text-gray-200"
+                    >
                       {{ account.priority || 50 }}
                     </span>
+                    <i
+                      v-else
+                      class="fas fa-spinner fa-spin min-w-[28px] text-center text-sm text-gray-500 dark:text-gray-400"
+                    />
+
+                    <!-- 增加按钮 -->
+                    <button
+                      :disabled="isPriorityUpdating(account.id) || (account.priority || 50) >= 100"
+                      :title="
+                        isPriorityUpdating(account.id)
+                          ? '正在更新...'
+                          : (account.priority || 50) >= 100
+                            ? '已达到最大值'
+                            : '提高优先级 (+10)'
+                      "
+                      class="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-green-300 hover:bg-green-50 hover:text-green-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-green-400 dark:hover:bg-green-500/20 dark:hover:text-green-400 sm:h-6 sm:w-6"
+                      @click.stop="adjustPriority(account, +10)"
+                    >
+                      <i class="fas fa-plus text-xs" />
+                    </button>
                   </div>
                   <div v-else class="text-sm text-gray-400">
                     <span class="text-xs">N/A</span>
@@ -1568,9 +1602,51 @@
             <!-- 调度优先级 -->
             <div class="flex items-center justify-between text-xs">
               <span class="text-gray-500 dark:text-gray-400">优先级</span>
-              <span class="font-medium text-gray-700 dark:text-gray-200">
-                {{ account.priority || 50 }}
-              </span>
+              <div class="flex items-center gap-2">
+                <!-- 减少按钮 -->
+                <button
+                  :disabled="isPriorityUpdating(account.id) || (account.priority || 50) <= 1"
+                  :title="
+                    isPriorityUpdating(account.id)
+                      ? '正在更新...'
+                      : (account.priority || 50) <= 1
+                        ? '已达到最小值'
+                        : '降低优先级 (-10)'
+                  "
+                  class="flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:bg-blue-500/20 dark:hover:text-blue-400"
+                  @click.stop="adjustPriority(account, -10)"
+                >
+                  <i class="fas fa-minus text-xs" />
+                </button>
+
+                <!-- 优先级数字或Loading -->
+                <span
+                  v-if="!isPriorityUpdating(account.id)"
+                  class="min-w-[32px] text-center font-bold text-gray-700 dark:text-gray-200"
+                >
+                  {{ account.priority || 50 }}
+                </span>
+                <i
+                  v-else
+                  class="fas fa-spinner fa-spin min-w-[32px] text-center text-gray-500 dark:text-gray-400"
+                />
+
+                <!-- 增加按钮 -->
+                <button
+                  :disabled="isPriorityUpdating(account.id) || (account.priority || 50) >= 100"
+                  :title="
+                    isPriorityUpdating(account.id)
+                      ? '正在更新...'
+                      : (account.priority || 50) >= 100
+                        ? '已达到最大值'
+                        : '提高优先级 (+10)'
+                  "
+                  class="flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-green-300 hover:bg-green-50 hover:text-green-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-green-400 dark:hover:bg-green-500/20 dark:hover:text-green-400"
+                  @click.stop="adjustPriority(account, +10)"
+                >
+                  <i class="fas fa-plus text-xs" />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2045,6 +2121,9 @@ const bindingCountsLoaded = ref(false) // 轻量级绑定计数缓存
 const groupsLoaded = ref(false)
 const groupMembersLoaded = ref(false)
 const accountGroupMap = ref(new Map()) // Map<accountId, Array<groupInfo>>
+
+// 优先级更新状态
+const updatingPriorities = ref(new Set())
 
 // 下拉选项数据
 const sortOptions = ref([
@@ -2900,6 +2979,56 @@ const loadBalanceCacheForAccounts = async () => {
     ...account,
     balanceInfo: balanceMap[account.id] || account.balanceInfo || null
   }))
+}
+
+// 获取账户更新端点
+const getAccountUpdateEndpoint = (account) => {
+  const platformMap = {
+    claude: '/admin/claude-accounts',
+    'claude-console': '/admin/claude-console-accounts',
+    gemini: '/admin/gemini-accounts',
+    'gemini-api': '/admin/gemini-api-accounts',
+    'openai-responses': '/admin/openai-responses-accounts',
+    bedrock: '/admin/bedrock-accounts',
+    azure_openai: '/admin/azure-openai-accounts',
+    droid: '/admin/droid-accounts',
+    ccr: '/admin/ccr-accounts',
+    openai: '/admin/openai-accounts'
+  }
+  return platformMap[account.platform] || '/admin/claude-accounts'
+}
+
+// 判断账户优先级是否正在更新
+const isPriorityUpdating = (accountId) => {
+  return updatingPriorities.value.has(accountId)
+}
+
+// 调整账户优先级
+const adjustPriority = async (account, delta) => {
+  const currentPriority = account.priority || 50
+  const newPriority = Math.max(1, Math.min(100, currentPriority + delta))
+
+  // 如果新值与当前值相同，不需要更新
+  if (newPriority === currentPriority) {
+    return
+  }
+
+  updatingPriorities.value.add(account.id)
+
+  try {
+    const endpoint = getAccountUpdateEndpoint(account)
+    await apiClient.put(`${endpoint}/${account.id}`, { priority: newPriority })
+
+    // 刷新账户列表
+    await loadAccounts(true)
+
+    showToast('优先级已更新', 'success')
+  } catch (error) {
+    console.error('更新优先级失败:', error)
+    showToast(`更新优先级失败: ${error.message || '未知错误'}`, 'error')
+  } finally {
+    updatingPriorities.value.delete(account.id)
+  }
 }
 
 // 加载账户列表
