@@ -532,6 +532,7 @@
                   >
                     <!-- 减少按钮 -->
                     <button
+                      class="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:bg-blue-500/20 dark:hover:text-blue-400 sm:h-6 sm:w-6"
                       :disabled="isPriorityUpdating(account.id) || (account.priority || 50) <= 1"
                       :title="
                         isPriorityUpdating(account.id)
@@ -540,7 +541,6 @@
                             ? '已达到最小值'
                             : '降低优先级 (-10)'
                       "
-                      class="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:bg-blue-500/20 dark:hover:text-blue-400 sm:h-6 sm:w-6"
                       @click.stop="adjustPriority(account, -10)"
                     >
                       <i class="fas fa-minus text-xs" />
@@ -560,6 +560,7 @@
 
                     <!-- 增加按钮 -->
                     <button
+                      class="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-green-300 hover:bg-green-50 hover:text-green-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-green-400 dark:hover:bg-green-500/20 dark:hover:text-green-400 sm:h-6 sm:w-6"
                       :disabled="isPriorityUpdating(account.id) || (account.priority || 50) >= 100"
                       :title="
                         isPriorityUpdating(account.id)
@@ -568,7 +569,6 @@
                             ? '已达到最大值'
                             : '提高优先级 (+10)'
                       "
-                      class="flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-green-300 hover:bg-green-50 hover:text-green-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-green-400 dark:hover:bg-green-500/20 dark:hover:text-green-400 sm:h-6 sm:w-6"
                       @click.stop="adjustPriority(account, +10)"
                     >
                       <i class="fas fa-plus text-xs" />
@@ -1605,6 +1605,7 @@
               <div class="flex items-center gap-2">
                 <!-- 减少按钮 -->
                 <button
+                  class="flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:bg-blue-500/20 dark:hover:text-blue-400"
                   :disabled="isPriorityUpdating(account.id) || (account.priority || 50) <= 1"
                   :title="
                     isPriorityUpdating(account.id)
@@ -1613,7 +1614,6 @@
                         ? '已达到最小值'
                         : '降低优先级 (-10)'
                   "
-                  class="flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:bg-blue-500/20 dark:hover:text-blue-400"
                   @click.stop="adjustPriority(account, -10)"
                 >
                   <i class="fas fa-minus text-xs" />
@@ -1633,6 +1633,7 @@
 
                 <!-- 增加按钮 -->
                 <button
+                  class="flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-green-300 hover:bg-green-50 hover:text-green-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-green-400 dark:hover:bg-green-500/20 dark:hover:text-green-400"
                   :disabled="isPriorityUpdating(account.id) || (account.priority || 50) >= 100"
                   :title="
                     isPriorityUpdating(account.id)
@@ -1641,7 +1642,6 @@
                         ? '已达到最大值'
                         : '提高优先级 (+10)'
                   "
-                  class="flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:border-green-300 hover:bg-green-50 hover:text-green-600 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-green-400 dark:hover:bg-green-500/20 dark:hover:text-green-400"
                   @click.stop="adjustPriority(account, +10)"
                 >
                   <i class="fas fa-plus text-xs" />
@@ -2511,6 +2511,7 @@ const handleBalanceScriptSaved = async () => {
       handleBalanceRefreshed(account.id, res.data)
     }
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.debug('Failed to reload balance after saving script:', error)
   }
 }
@@ -2953,6 +2954,7 @@ const loadBalanceCacheForAccounts = async () => {
         })
         return { platform, success: !!res?.success, data: res?.data || [] }
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.debug(`Failed to load balance cache for ${platform}:`, error)
         return { platform, success: false, data: [] }
       }
@@ -3024,6 +3026,7 @@ const adjustPriority = async (account, delta) => {
 
     showToast('优先级已更新', 'success')
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('更新优先级失败:', error)
     showToast(`更新优先级失败: ${error.message || '未知错误'}`, 'error')
   } finally {
@@ -3063,6 +3066,7 @@ const loadAccounts = async (forceReload = false) => {
           const res = await handler(params)
           return { platform, success: res?.success, data: res?.data }
         } catch (error) {
+          // eslint-disable-next-line no-console
           console.debug(`Failed to load ${platform} accounts:`, error)
           return { platform, success: false, data: [] }
         }
@@ -3174,6 +3178,7 @@ const loadAccounts = async (forceReload = false) => {
           }, {})
         }
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.debug('Failed to load auto-recovery configs:', error)
       }
 
@@ -3220,12 +3225,14 @@ const loadAccounts = async (forceReload = false) => {
     // 异步加载 Claude OAuth 账户的 usage 数据
     if (filteredAccounts.some((acc) => acc.platform === 'claude')) {
       loadClaudeUsage().catch((err) => {
+        // eslint-disable-next-line no-console
         console.debug('Claude usage loading failed:', err)
       })
     }
 
     // 异步加载余额缓存（按平台批量）
     loadBalanceCacheForAccounts().catch((err) => {
+      // eslint-disable-next-line no-console
       console.debug('Balance cache loading failed:', err)
     })
   } catch (error) {
@@ -3254,6 +3261,7 @@ const loadClaudeUsage = async () => {
       })
     }
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.debug('Failed to load Claude usage data:', error)
   }
 }
@@ -3456,6 +3464,7 @@ function normalizeProxyData(proxy) {
 }
 
 // 格式化代理信息显示
+// eslint-disable-next-line no-unused-vars
 const formatProxyDisplay = (proxy) => {
   const parsed = normalizeProxyData(proxy)
   if (!parsed) {
@@ -3921,6 +3930,7 @@ const handleEditSuccess = () => {
 }
 
 // 获取 Claude 账号的添加方式
+// eslint-disable-next-line no-unused-vars
 const getClaudeAuthType = (account) => {
   // 基于 lastRefreshAt 判断：如果为空说明是 Setup Token（不能刷新），否则是 OAuth
   if (!account.lastRefreshAt || account.lastRefreshAt === '') {
@@ -3930,12 +3940,14 @@ const getClaudeAuthType = (account) => {
 }
 
 // 获取 Gemini 账号的添加方式
+// eslint-disable-next-line no-unused-vars
 const getGeminiAuthType = () => {
   // Gemini 统一显示 OAuth
   return 'OAuth'
 }
 
 // 获取 OpenAI 账号的添加方式
+// eslint-disable-next-line no-unused-vars
 const getOpenAIAuthType = () => {
   // OpenAI 统一显示 OAuth
   return 'OAuth'
@@ -3988,6 +4000,7 @@ const getDroidAuthType = (account) => {
 }
 
 // 判断是否为 API Key 模式的 Droid 账号
+// eslint-disable-next-line no-unused-vars
 const isDroidApiKeyMode = (account) => getDroidAuthType(account) === 'API Key'
 
 // 获取 Droid 账号的 API Key 数量
@@ -4033,6 +4046,7 @@ const getDroidApiKeyCount = (account) => {
 }
 
 // 根据数量返回徽标样式
+// eslint-disable-next-line no-unused-vars
 const getDroidApiKeyBadgeClasses = (account) => {
   const count = getDroidApiKeyCount(account)
   const baseClass =
@@ -4052,6 +4066,7 @@ const getDroidApiKeyBadgeClasses = (account) => {
 }
 
 // 获取 Claude 账号类型显示
+// eslint-disable-next-line no-unused-vars
 const getClaudeAccountType = (account) => {
   // 如果有订阅信息
   if (account.subscriptionInfo) {
@@ -4714,6 +4729,7 @@ const handleSaveAccountExpiry = async ({ accountId, expiresAt }) => {
       }
     }
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('更新账户过期时间失败:', error)
     showToast('更新失败', 'error')
     // 重置保存状态
