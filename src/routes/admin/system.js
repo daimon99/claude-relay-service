@@ -67,14 +67,15 @@ router.delete('/claude-code-headers/:accountId', authenticateAdmin, async (req, 
 
 // ==================== 系统更新检查 ====================
 
-// 版本比较函数
+// 版本比较函数（支持四段版本号：major.minor.patch.build）
 function compareVersions(current, latest) {
   const parseVersion = (v) => {
     const parts = v.split('.').map(Number)
     return {
       major: parts[0] || 0,
       minor: parts[1] || 0,
-      patch: parts[2] || 0
+      patch: parts[2] || 0,
+      build: parts[3] || 0
     }
   }
 
@@ -87,7 +88,10 @@ function compareVersions(current, latest) {
   if (currentV.minor !== latestV.minor) {
     return currentV.minor - latestV.minor
   }
-  return currentV.patch - latestV.patch
+  if (currentV.patch !== latestV.patch) {
+    return currentV.patch - latestV.patch
+  }
+  return currentV.build - latestV.build
 }
 
 router.get('/check-updates', authenticateAdmin, async (req, res) => {
@@ -128,7 +132,7 @@ router.get('/check-updates', authenticateAdmin, async (req, res) => {
     }
 
     // 请求 GitHub API
-    const githubRepo = 'wei-shaw/claude-relay-service'
+    const githubRepo = 'daimon99/claude-relay-service'
     const response = await axios.get(`https://api.github.com/repos/${githubRepo}/releases/latest`, {
       headers: {
         Accept: 'application/vnd.github.v3+json',
