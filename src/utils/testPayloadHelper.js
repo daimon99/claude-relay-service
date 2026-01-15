@@ -1,4 +1,5 @@
 const crypto = require('crypto')
+const accountAutoDisableService = require('../services/accountAutoDisableService')
 
 /**
  * 生成随机十六进制字符串
@@ -76,6 +77,8 @@ function createClaudeTestPayload(model = 'claude-sonnet-4-5-20250929', options =
  * @param {object} [options.proxyAgent] - 代理agent
  * @param {number} [options.timeout] - 超时时间（默认30000）
  * @param {object} [options.extraHeaders] - 额外的请求头
+ * @param {string} [options.accountId] - 账户ID（用于自动禁用）
+ * @param {string} [options.accountType] - 账户类型（用于自动禁用）
  * @returns {Promise<void>}
  */
 async function sendStreamTestRequest(options) {
@@ -89,7 +92,9 @@ async function sendStreamTestRequest(options) {
     payload = createClaudeTestPayload('claude-sonnet-4-5-20250929', { stream: true }),
     proxyAgent = null,
     timeout = 30000,
-    extraHeaders = {}
+    extraHeaders = {},
+    accountId = null,
+    accountType = null
   } = options
 
   const sendSSE = (type, data = {}) => {
@@ -210,6 +215,24 @@ async function sendStreamTestRequest(options) {
             bodyPreview,
             fullError: parsedError
           })
+
+          // 调用自动禁用服务
+          if (response.status >= 400 && response.status < 600) {
+            if (accountId && accountType) {
+              accountAutoDisableService
+                .handleErrorResponse(
+                  accountId,
+                  accountType,
+                  response.status,
+                  errorMsg,
+                  apiUrl,
+                  'test'
+                )
+                .catch((err) => {
+                  logger.error('❌ Failed to auto-disable account in test:', err)
+                })
+            }
+          }
 
           endTest(false, errorMsg)
           resolve()
