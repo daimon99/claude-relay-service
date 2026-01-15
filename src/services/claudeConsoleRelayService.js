@@ -12,6 +12,7 @@ const {
 const userMessageQueueService = require('./userMessageQueueService')
 const { isStreamWritable } = require('../utils/streamHelper')
 const { filterForClaude } = require('../utils/headerFilter')
+const accountAutoDisableService = require('./accountAutoDisableService')
 
 class ClaudeConsoleRelayService {
   constructor() {
@@ -318,6 +319,22 @@ class ClaudeConsoleRelayService {
             typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
           const sanitizedText = sanitizeErrorMessage(rawText)
           logger.error(`🧹 [SANITIZED] Error response to client: ${sanitizedText}`)
+        }
+
+        // 🚫 自动禁用逻辑：在所有现有错误处理之后，return 之前调用
+        if (response.status >= 400 && response.status < 600) {
+          accountAutoDisableService
+            .handleErrorResponse(
+              accountId,
+              'claude-console',
+              response.status,
+              rawData,
+              account?.apiUrl || 'Unknown URL',
+              'request'
+            )
+            .catch((err) => {
+              logger.error('❌ Failed to auto-disable Claude Console account:', err)
+            })
         }
       } else {
         logger.debug(
@@ -862,6 +879,22 @@ class ClaudeConsoleRelayService {
                 if (!autoProtectionDisabled) {
                   await claudeConsoleAccountService.markAccountOverloaded(accountId)
                 }
+              }
+
+              // 🚫 自动禁用逻辑：在流式错误处理末尾调用
+              if (response.status >= 400 && response.status < 600) {
+                accountAutoDisableService
+                  .handleErrorResponse(
+                    accountId,
+                    'claude-console',
+                    response.status,
+                    errorDataForCheck,
+                    account?.apiUrl || 'Unknown URL',
+                    'request'
+                  )
+                  .catch((err) => {
+                    logger.error('❌ Failed to auto-disable Claude Console account in stream:', err)
+                  })
               }
 
               // 设置响应头
