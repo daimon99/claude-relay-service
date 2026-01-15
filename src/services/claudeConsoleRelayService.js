@@ -1443,7 +1443,9 @@ class ClaudeConsoleRelayService {
         authorization: `Bearer ${account.apiKey}`,
         responseStream,
         proxyAgent: claudeConsoleAccountService._createProxyAgent(account.proxy),
-        extraHeaders: account.userAgent ? { 'User-Agent': account.userAgent } : {}
+        extraHeaders: account.userAgent ? { 'User-Agent': account.userAgent } : {},
+        accountId,
+        accountType: 'claude-console'
       })
     } catch (error) {
       logger.error(`❌ Test account connection failed:`, error)
