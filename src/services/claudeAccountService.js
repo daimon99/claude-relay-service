@@ -760,6 +760,23 @@ class ClaudeAccountService {
         }
       }
 
+      // 自动禁用相关字段
+      if (updates.autoDisabledAt !== undefined) {
+        updatedData.autoDisabledAt = updates.autoDisabledAt
+      }
+      if (updates.autoDisabledReason !== undefined) {
+        updatedData.autoDisabledReason = updates.autoDisabledReason
+      }
+      if (updates.autoDisabledDetails !== undefined) {
+        updatedData.autoDisabledDetails = updates.autoDisabledDetails
+      }
+      if (updates.lastAutoRecoveryAttempt !== undefined) {
+        updatedData.lastAutoRecoveryAttempt = updates.lastAutoRecoveryAttempt
+      }
+      if (updates.autoRecoveredAt !== undefined) {
+        updatedData.autoRecoveredAt = updates.autoRecoveredAt
+      }
+
       updatedData.updatedAt = new Date().toISOString()
 
       // 如果是手动修改调度状态，清除所有自动停止相关的字段

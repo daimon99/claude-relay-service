@@ -229,6 +229,23 @@ async function updateAccount(accountId, updates) {
     // 直接保存，不做任何调整
   }
 
+  // 自动禁用相关字段
+  if (updates.autoDisabledAt !== undefined) {
+    updates.autoDisabledAt = updates.autoDisabledAt
+  }
+  if (updates.autoDisabledReason !== undefined) {
+    updates.autoDisabledReason = updates.autoDisabledReason
+  }
+  if (updates.autoDisabledDetails !== undefined) {
+    updates.autoDisabledDetails = updates.autoDisabledDetails
+  }
+  if (updates.lastAutoRecoveryAttempt !== undefined) {
+    updates.lastAutoRecoveryAttempt = updates.lastAutoRecoveryAttempt
+  }
+  if (updates.autoRecoveredAt !== undefined) {
+    updates.autoRecoveredAt = updates.autoRecoveredAt
+  }
+
   // 更新账户类型时处理共享账户集合
   const client = redisClient.getClientSafe()
   if (updates.accountType && updates.accountType !== existingAccount.accountType) {

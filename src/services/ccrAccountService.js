@@ -303,6 +303,23 @@ class CcrAccountService {
         updatedData.subscriptionExpiresAt = updates.subscriptionExpiresAt
       }
 
+      // 自动禁用相关字段
+      if (updates.autoDisabledAt !== undefined) {
+        updatedData.autoDisabledAt = updates.autoDisabledAt
+      }
+      if (updates.autoDisabledReason !== undefined) {
+        updatedData.autoDisabledReason = updates.autoDisabledReason
+      }
+      if (updates.autoDisabledDetails !== undefined) {
+        updatedData.autoDisabledDetails = updates.autoDisabledDetails
+      }
+      if (updates.lastAutoRecoveryAttempt !== undefined) {
+        updatedData.lastAutoRecoveryAttempt = updates.lastAutoRecoveryAttempt
+      }
+      if (updates.autoRecoveredAt !== undefined) {
+        updatedData.autoRecoveredAt = updates.autoRecoveredAt
+      }
+
       await client.hset(`${this.ACCOUNT_KEY_PREFIX}${accountId}`, updatedData)
 
       // 处理共享账户集合变更

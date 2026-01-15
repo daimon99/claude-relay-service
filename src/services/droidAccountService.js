@@ -1048,6 +1048,23 @@ class DroidAccountService {
       // 直接保存，不做任何调整
     }
 
+    // 自动禁用相关字段
+    if (sanitizedUpdates.autoDisabledAt !== undefined) {
+      sanitizedUpdates.autoDisabledAt = sanitizedUpdates.autoDisabledAt
+    }
+    if (sanitizedUpdates.autoDisabledReason !== undefined) {
+      sanitizedUpdates.autoDisabledReason = sanitizedUpdates.autoDisabledReason
+    }
+    if (sanitizedUpdates.autoDisabledDetails !== undefined) {
+      sanitizedUpdates.autoDisabledDetails = sanitizedUpdates.autoDisabledDetails
+    }
+    if (sanitizedUpdates.lastAutoRecoveryAttempt !== undefined) {
+      sanitizedUpdates.lastAutoRecoveryAttempt = sanitizedUpdates.lastAutoRecoveryAttempt
+    }
+    if (sanitizedUpdates.autoRecoveredAt !== undefined) {
+      sanitizedUpdates.autoRecoveredAt = sanitizedUpdates.autoRecoveredAt
+    }
+
     if (sanitizedUpdates.proxy === undefined) {
       sanitizedUpdates.proxy = account.proxy || ''
     }

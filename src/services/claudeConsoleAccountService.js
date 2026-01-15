@@ -390,6 +390,23 @@ class ClaudeConsoleAccountService {
         updatedData.subscriptionExpiresAt = updates.subscriptionExpiresAt
       }
 
+      // 自动禁用相关字段
+      if (updates.autoDisabledAt !== undefined) {
+        updatedData.autoDisabledAt = updates.autoDisabledAt
+      }
+      if (updates.autoDisabledReason !== undefined) {
+        updatedData.autoDisabledReason = updates.autoDisabledReason
+      }
+      if (updates.autoDisabledDetails !== undefined) {
+        updatedData.autoDisabledDetails = updates.autoDisabledDetails
+      }
+      if (updates.lastAutoRecoveryAttempt !== undefined) {
+        updatedData.lastAutoRecoveryAttempt = updates.lastAutoRecoveryAttempt
+      }
+      if (updates.autoRecoveredAt !== undefined) {
+        updatedData.autoRecoveredAt = updates.autoRecoveredAt
+      }
+
       // 处理账户类型变更
       if (updates.accountType && updates.accountType !== existingAccount.accountType) {
         updatedData.accountType = updates.accountType

@@ -337,6 +337,23 @@ class BedrockAccountService {
         account.subscriptionExpiresAt = updates.subscriptionExpiresAt
       }
 
+      // 自动禁用相关字段
+      if (updates.autoDisabledAt !== undefined) {
+        account.autoDisabledAt = updates.autoDisabledAt
+      }
+      if (updates.autoDisabledReason !== undefined) {
+        account.autoDisabledReason = updates.autoDisabledReason
+      }
+      if (updates.autoDisabledDetails !== undefined) {
+        account.autoDisabledDetails = updates.autoDisabledDetails
+      }
+      if (updates.lastAutoRecoveryAttempt !== undefined) {
+        account.lastAutoRecoveryAttempt = updates.lastAutoRecoveryAttempt
+      }
+      if (updates.autoRecoveredAt !== undefined) {
+        account.autoRecoveredAt = updates.autoRecoveredAt
+      }
+
       account.updatedAt = new Date().toISOString()
 
       await client.set(`bedrock_account:${accountId}`, JSON.stringify(account))
