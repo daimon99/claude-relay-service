@@ -17,6 +17,7 @@ const requestIdentityService = require('./requestIdentityService')
 const { createClaudeTestPayload } = require('../utils/testPayloadHelper')
 const userMessageQueueService = require('./userMessageQueueService')
 const { isStreamWritable } = require('../utils/streamHelper')
+const accountAutoDisableService = require('./accountAutoDisableService')
 
 class ClaudeRelayService {
   constructor() {
@@ -912,6 +913,22 @@ class ClaudeRelayService {
               }),
               accountId
             }
+          }
+        }
+
+        // 在所有现有错误处理之后，添加统一的自动禁用逻辑
+        if (response.statusCode >= 400 && response.statusCode < 600) {
+          try {
+            await accountAutoDisableService.handleErrorResponse(
+              accountId,
+              accountType,
+              response.statusCode,
+              this._extractErrorMessage(response.body),
+              'https://api.anthropic.com/v1/messages',
+              'request'
+            )
+          } catch (autoDisableError) {
+            logger.error('❌ Failed to auto-disable account:', autoDisableError)
           }
         }
       } else if (response.statusCode === 200 || response.statusCode === 201) {
