@@ -753,6 +753,22 @@ class ClaudeRelayService {
         // 📝 记录非200响应的详细信息（用于调试和错误分析）
         this._logErrorResponse(accountId, response, 'Non-streaming')
 
+        // 🚫 统一的 4xx/5xx 自动禁用逻辑（在所有特殊处理之前）
+        if (response.statusCode >= 400 && response.statusCode < 600) {
+          try {
+            await accountAutoDisableService.handleErrorResponse(
+              accountId,
+              accountType,
+              response.statusCode,
+              this._extractErrorMessage(response.body),
+              'https://api.anthropic.com/v1/messages',
+              'request'
+            )
+          } catch (autoDisableError) {
+            logger.error('❌ Failed to auto-disable account:', autoDisableError)
+          }
+        }
+
         let isRateLimited = false
         let rateLimitResetTimestamp = null
         let dedicatedRateLimitMessage = null
@@ -913,22 +929,6 @@ class ClaudeRelayService {
               }),
               accountId
             }
-          }
-        }
-
-        // 在所有现有错误处理之后，添加统一的自动禁用逻辑
-        if (response.statusCode >= 400 && response.statusCode < 600) {
-          try {
-            await accountAutoDisableService.handleErrorResponse(
-              accountId,
-              accountType,
-              response.statusCode,
-              this._extractErrorMessage(response.body),
-              'https://api.anthropic.com/v1/messages',
-              'request'
-            )
-          } catch (autoDisableError) {
-            logger.error('❌ Failed to auto-disable account:', autoDisableError)
           }
         }
       } else if (response.statusCode === 200 || response.statusCode === 201) {
