@@ -40,10 +40,16 @@ class AutoRecoveryService {
     )
     this.isRunning = true
 
-    // 立即执行一次
-    this.runRecoveryCheck().catch((err) => {
-      logger.error('❌ [Auto Recovery] Initial check failed:', err)
-    })
+    // 启动时先清理一次数据不一致的账户
+    this.cleanupInconsistentData()
+      .then(() => {
+        logger.info('✅ [Auto Recovery] Initial data cleanup completed')
+        // 立即执行一次完整的恢复检查
+        return this.runRecoveryCheck()
+      })
+      .catch((err) => {
+        logger.error('❌ [Auto Recovery] Initial cleanup/check failed:', err)
+      })
 
     // 设置定时任务
     this.intervalHandle = setInterval(() => {
@@ -51,6 +57,66 @@ class AutoRecoveryService {
         logger.error('❌ [Auto Recovery] Scheduled check failed:', err)
       })
     }, this.testInterval)
+  }
+
+  /**
+   * 清理所有数据不一致的账户（启动时调用）
+   */
+  async cleanupInconsistentData() {
+    logger.info('🧹 [Auto Recovery] Starting data consistency cleanup...')
+
+    const accountTypes = [
+      'claude-official',
+      'claude-console',
+      'gemini',
+      'bedrock',
+      'azure-openai',
+      'droid',
+      'ccr',
+      'openai-responses'
+    ]
+
+    let totalCleaned = 0
+
+    for (const accountType of accountTypes) {
+      try {
+        const disabledAccountIds = await redis.smembers(`auto_disabled_accounts:${accountType}`)
+
+        if (!disabledAccountIds || disabledAccountIds.length === 0) {
+          continue
+        }
+
+        logger.info(
+          `🔍 [Auto Recovery] Checking ${disabledAccountIds.length} ${accountType} accounts for data consistency`
+        )
+
+        for (const accountId of disabledAccountIds) {
+          try {
+            const isValid = await this._validateAccountData(accountId, accountType)
+
+            if (!isValid) {
+              await this._cleanupInconsistentAccount(accountId, accountType)
+              totalCleaned++
+            }
+          } catch (error) {
+            logger.error(
+              `❌ [Auto Recovery] Error cleaning account ${accountId} (${accountType}):`,
+              error
+            )
+          }
+        }
+      } catch (error) {
+        logger.error(`❌ [Auto Recovery] Error cleaning ${accountType}:`, error)
+      }
+    }
+
+    if (totalCleaned > 0) {
+      logger.info(`✅ [Auto Recovery] Cleaned ${totalCleaned} inconsistent accounts`)
+    } else {
+      logger.info('✅ [Auto Recovery] No inconsistent data found')
+    }
+
+    return { totalCleaned }
   }
 
   /**
@@ -86,6 +152,7 @@ class AutoRecoveryService {
     let totalChecked = 0
     let totalRecovered = 0
     let totalFailed = 0
+    let totalCleaned = 0
 
     // 逐个类型处理
     for (const accountType of accountTypes) {
@@ -94,17 +161,21 @@ class AutoRecoveryService {
         totalChecked += result.checked
         totalRecovered += result.recovered
         totalFailed += result.failed
+        totalCleaned += result.cleaned
       } catch (error) {
         logger.error(`❌ [Auto Recovery] Error checking ${accountType}:`, error)
       }
     }
 
     const duration = Date.now() - startTime
-    logger.info(
-      `✅ [Auto Recovery] Check completed: ${totalChecked} checked, ${totalRecovered} recovered, ${totalFailed} failed, duration: ${duration}ms`
-    )
+    let logMessage = `✅ [Auto Recovery] Check completed: ${totalChecked} checked, ${totalRecovered} recovered, ${totalFailed} failed`
+    if (totalCleaned > 0) {
+      logMessage += `, ${totalCleaned} cleaned (data inconsistency)`
+    }
+    logMessage += `, duration: ${duration}ms`
+    logger.info(logMessage)
 
-    return { totalChecked, totalRecovered, totalFailed, duration }
+    return { totalChecked, totalRecovered, totalFailed, totalCleaned, duration }
   }
 
   /**
@@ -114,16 +185,27 @@ class AutoRecoveryService {
     const disabledAccountIds = await redis.smembers(`auto_disabled_accounts:${accountType}`)
 
     if (!disabledAccountIds || disabledAccountIds.length === 0) {
-      return { checked: 0, recovered: 0, failed: 0 }
+      return { checked: 0, recovered: 0, failed: 0, cleaned: 0 }
     }
 
     logger.info(`🔄 [Auto Recovery] Checking ${disabledAccountIds.length} ${accountType} accounts`)
 
     let recovered = 0
     let failed = 0
+    let cleaned = 0
 
     for (const accountId of disabledAccountIds) {
       try {
+        // 先验证数据完整性
+        const isValid = await this._validateAccountData(accountId, accountType)
+
+        if (!isValid) {
+          // 数据不一致，自动清理
+          await this._cleanupInconsistentAccount(accountId, accountType)
+          cleaned++
+          continue
+        }
+
         // 更新最后尝试时间
         await this._updateLastRecoveryAttempt(accountId, accountType)
 
@@ -150,7 +232,86 @@ class AutoRecoveryService {
       }
     }
 
-    return { checked: disabledAccountIds.length, recovered, failed }
+    return { checked: disabledAccountIds.length, recovered, failed, cleaned }
+  }
+
+  /**
+   * 验证账户数据完整性
+   */
+  async _validateAccountData(accountId, accountType) {
+    try {
+      const account = await this._getAccountByType(accountId, accountType)
+
+      if (!account) {
+        logger.warn(
+          `⚠️ [Auto Recovery] Account ${accountId} (${accountType}) not found, will clean up`
+        )
+        return false
+      }
+
+      // 检查必要的自动禁用字段
+      if (!account.autoDisabledAt || !account.autoDisabledReason) {
+        logger.warn(
+          `⚠️ [Auto Recovery] Account ${accountId} (${accountType}) missing required fields (autoDisabledAt: ${!!account.autoDisabledAt}, autoDisabledReason: ${!!account.autoDisabledReason}), will clean up`
+        )
+        return false
+      }
+
+      return true
+    } catch (error) {
+      logger.error(
+        `❌ [Auto Recovery] Error validating account ${accountId} (${accountType}):`,
+        error
+      )
+      return false
+    }
+  }
+
+  /**
+   * 清理数据不一致的账户
+   */
+  async _cleanupInconsistentAccount(accountId, accountType) {
+    logger.info(`🧹 [Auto Recovery] Cleaning up inconsistent account ${accountId} (${accountType})`)
+
+    try {
+      // 从自动禁用索引中移除
+      await redis.srem(`auto_disabled_accounts:${accountType}`, accountId)
+
+      logger.info(
+        `✅ [Auto Recovery] Removed inconsistent account ${accountId} (${accountType}) from auto-disabled index`
+      )
+    } catch (error) {
+      logger.error(
+        `❌ [Auto Recovery] Failed to cleanup inconsistent account ${accountId} (${accountType}):`,
+        error
+      )
+    }
+  }
+
+  /**
+   * 根据账户类型获取账户数据
+   */
+  async _getAccountByType(accountId, accountType) {
+    switch (accountType) {
+      case 'claude-official':
+        return await claudeAccountService.getAccount(accountId)
+      case 'claude-console':
+        return await claudeConsoleAccountService.getAccount(accountId)
+      case 'gemini':
+        return await geminiAccountService.getAccount(accountId)
+      case 'bedrock':
+        return await bedrockAccountService.getAccount(accountId)
+      case 'azure-openai':
+        return await azureOpenaiAccountService.getAccount(accountId)
+      case 'droid':
+        return await droidAccountService.getAccount(accountId)
+      case 'ccr':
+        return await ccrAccountService.getAccount(accountId)
+      case 'openai-responses':
+        return await openaiResponsesAccountService.getAccount(accountId)
+      default:
+        throw new Error(`Unknown account type: ${accountType}`)
+    }
   }
 
   /**
