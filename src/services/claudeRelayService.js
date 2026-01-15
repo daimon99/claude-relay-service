@@ -2152,6 +2152,22 @@ class ClaudeRelayService {
               )
               await this._handleServerError(accountId, res.statusCode, sessionHash, '[Stream]')
             }
+
+            // 自动禁用账户检测
+            if (res.statusCode >= 400 && res.statusCode < 600) {
+              accountAutoDisableService
+                .handleErrorResponse(
+                  accountId,
+                  accountType,
+                  res.statusCode,
+                  'Stream error',
+                  'https://api.anthropic.com/v1/messages',
+                  'request'
+                )
+                .catch((err) => {
+                  logger.error('❌ Failed to auto-disable account in stream:', err)
+                })
+            }
           }
 
           // 调用异步错误处理函数
