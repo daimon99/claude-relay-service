@@ -2607,6 +2607,21 @@ class RedisClient {
     return await client.keys(pattern)
   }
 
+  async sadd(key, ...members) {
+    const client = this.getClientSafe()
+    return await client.sadd(key, ...members)
+  }
+
+  async srem(key, ...members) {
+    const client = this.getClientSafe()
+    return await client.srem(key, ...members)
+  }
+
+  async smembers(key) {
+    const client = this.getClientSafe()
+    return await client.smembers(key)
+  }
+
   // 📊 获取账户会话窗口内的使用统计（包含模型细分）
   async getAccountSessionWindowUsage(accountId, windowStart, windowEnd) {
     try {
