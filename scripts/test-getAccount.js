@@ -4,6 +4,7 @@
  * 测试 getAccount 方法返回的字段
  */
 
+const redis = require('../src/models/redis')
 const claudeConsoleAccountService = require('../src/services/claudeConsoleAccountService')
 
 const ACCOUNT_ID = '2381be85-ee26-4454-a898-0324d53e8ef2'
@@ -14,6 +15,11 @@ const ACCOUNT_ID = '2381be85-ee26-4454-a898-0324d53e8ef2'
     console.log('测试 getAccount 返回的字段')
     console.log('========================================')
     console.log(`账户 ID: ${ACCOUNT_ID}`)
+    console.log('')
+
+    // 连接 Redis
+    await redis.connect()
+    console.log('✅ Redis 已连接')
     console.log('')
 
     const account = await claudeConsoleAccountService.getAccount(ACCOUNT_ID)
