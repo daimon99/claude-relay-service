@@ -5,6 +5,7 @@ const logger = require('../utils/logger')
 const config = require('../../config/config')
 const bedrockRelayService = require('./bedrockRelayService')
 const LRUCache = require('../utils/lruCache')
+const accountAutoDisableService = require('./accountAutoDisableService')
 
 class BedrockAccountService {
   constructor() {
@@ -636,6 +637,24 @@ class BedrockAccountService {
       }
 
       logger.error(`❌ Test Bedrock account connection failed:`, errorDetails)
+
+      // 【新增】自动禁用逻辑
+      const statusCode = error.$metadata?.httpStatusCode || 500
+
+      if (statusCode >= 400 && statusCode < 600) {
+        accountAutoDisableService
+          .handleErrorResponse(
+            accountId,
+            'bedrock',
+            statusCode,
+            error.message,
+            'AWS Bedrock API',
+            'test'
+          )
+          .catch((err) => {
+            logger.error('❌ Failed to auto-disable Bedrock account:', err)
+          })
+      }
 
       // 发送错误事件给前端
       try {
