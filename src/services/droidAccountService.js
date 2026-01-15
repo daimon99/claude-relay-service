@@ -1048,6 +1048,30 @@ class DroidAccountService {
       // 直接保存，不做任何调整
     }
 
+    // 处理 schedulable 字段
+    if (sanitizedUpdates.schedulable !== undefined) {
+      // 只有手动修改调度状态时才清除自动停止字段和记录日志
+      // 判断：如果有 autoDisabledAt 字段，说明是自动禁用（来自 accountAutoDisableService）
+      const isAutoDisable = sanitizedUpdates.autoDisabledAt !== undefined
+
+      if (!isAutoDisable) {
+        // 手动修改：清除所有自动停止相关的字段，防止自动恢复
+        sanitizedUpdates.rateLimitAutoStopped = ''
+        sanitizedUpdates.quotaAutoStopped = ''
+        // 兼容旧的标记
+        sanitizedUpdates.autoStoppedAt = ''
+        sanitizedUpdates.stoppedReason = ''
+
+        // 记录手动修改日志
+        if (sanitizedUpdates.schedulable === true || sanitizedUpdates.schedulable === 'true') {
+          logger.info(`✅ Manually enabled scheduling for Droid account ${accountId}`)
+        } else {
+          logger.info(`⛔ Manually disabled scheduling for Droid account ${accountId}`)
+        }
+      }
+      // 自动禁用的情况：不清除字段，不记录"手动"日志
+    }
+
     // 自动禁用相关字段
     if (sanitizedUpdates.autoDisabledAt !== undefined) {
       sanitizedUpdates.autoDisabledAt = sanitizedUpdates.autoDisabledAt

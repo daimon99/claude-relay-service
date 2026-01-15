@@ -729,6 +729,29 @@ class ClaudeAccountService {
                 }
               }
             }
+          } else if (field === 'schedulable') {
+            updatedData.schedulable = value !== null && value !== undefined ? value.toString() : ''
+
+            // 只有手动修改调度状态时才清除自动停止字段和记录日志
+            // 判断：如果有 autoDisabledAt 字段，说明是自动禁用（来自 accountAutoDisableService）
+            const isAutoDisable = updates.autoDisabledAt !== undefined
+
+            if (!isAutoDisable) {
+              // 手动修改：清除所有自动停止相关的字段，防止自动恢复
+              updatedData.rateLimitAutoStopped = ''
+              updatedData.quotaAutoStopped = ''
+              // 兼容旧的标记
+              updatedData.autoStoppedAt = ''
+              updatedData.stoppedReason = ''
+
+              // 记录手动修改日志
+              if (value === true || value === 'true') {
+                logger.info(`✅ Manually enabled scheduling for Claude account ${accountId}`)
+              } else {
+                logger.info(`⛔ Manually disabled scheduling for Claude account ${accountId}`)
+              }
+            }
+            // 自动禁用的情况：不清除字段，不记录"手动"日志
           } else {
             updatedData[field] = value !== null && value !== undefined ? value.toString() : ''
           }

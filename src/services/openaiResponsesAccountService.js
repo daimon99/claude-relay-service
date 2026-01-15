@@ -149,6 +149,32 @@ class OpenAIResponsesAccountService {
       updates.proxy = updates.proxy ? JSON.stringify(updates.proxy) : ''
     }
 
+    // 处理 schedulable 字段
+    if (updates.schedulable !== undefined) {
+      // 只有手动修改调度状态时才清除自动停止字段和记录日志
+      // 判断：如果有 autoDisabledAt 字段，说明是自动禁用（来自 accountAutoDisableService）
+      const isAutoDisable = updates.autoDisabledAt !== undefined
+
+      if (!isAutoDisable) {
+        // 手动修改：清除所有自动停止相关的字段，防止自动恢复
+        updates.rateLimitAutoStopped = ''
+        updates.quotaAutoStopped = ''
+        // 兼容旧的标记
+        updates.autoStoppedAt = ''
+        updates.stoppedReason = ''
+
+        // 记录手动修改日志
+        if (updates.schedulable === true || updates.schedulable === 'true') {
+          logger.info(`✅ Manually enabled scheduling for OpenAI-Responses account ${accountId}`)
+        } else {
+          logger.info(
+            `⛔ Manually disabled scheduling for OpenAI-Responses account ${accountId}`
+          )
+        }
+      }
+      // 自动禁用的情况：不清除字段，不记录"手动"日志
+    }
+
     // 规范化 baseApi
     if (updates.baseApi) {
       updates.baseApi = updates.baseApi.endsWith('/')
