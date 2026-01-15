@@ -771,6 +771,11 @@ class Application {
     } else {
       logger.info('🧪 Account test scheduler service disabled')
     }
+
+    // 🔄 启动自动恢复服务
+    // 定期测试被自动禁用的账户，成功则恢复调度
+    const autoRecoveryService = require('./services/autoRecoveryService')
+    autoRecoveryService.start()
   }
 
   setupGracefulShutdown() {
@@ -832,6 +837,15 @@ class Application {
             logger.info('🧪 Account test scheduler service stopped')
           } catch (error) {
             logger.error('❌ Error stopping account test scheduler service:', error)
+          }
+
+          // 停止自动恢复服务
+          try {
+            const autoRecoveryService = require('./services/autoRecoveryService')
+            autoRecoveryService.stop()
+            logger.info('🔄 Auto recovery service stopped')
+          } catch (error) {
+            logger.error('❌ Error stopping auto recovery service:', error)
           }
 
           // 🔢 清理所有并发计数（Phase 1 修复：防止重启泄漏）
