@@ -132,6 +132,108 @@ class ClaudeRelayService {
     return message.toLowerCase().includes('this organization has been disabled')
   }
 
+  /**
+   * 📝 记录非流式响应的错误详情
+   * @param {string} accountId - 账户ID
+   * @param {Object} response - 响应对象 { statusCode, headers, body }
+   * @param {string} type - 请求类型标识（如 'Non-streaming'）
+   */
+  _logErrorResponse(accountId, response, type) {
+    try {
+      const { statusCode, headers, body } = response
+
+      // 提取关键响应头
+      const relevantHeaders = {}
+      const headerKeys = [
+        'content-type',
+        'anthropic-ratelimit-unified-reset',
+        'anthropic-ratelimit-requests-remaining',
+        'anthropic-ratelimit-requests-limit',
+        'anthropic-ratelimit-tokens-remaining',
+        'anthropic-ratelimit-tokens-limit',
+        'retry-after',
+        'x-should-retry'
+      ]
+
+      if (headers && typeof headers === 'object') {
+        headerKeys.forEach((key) => {
+          const value = this._getHeaderValueCaseInsensitive(headers, key)
+          if (value !== undefined) {
+            relevantHeaders[key] = value
+          }
+        })
+      }
+
+      // 提取响应体内容（截断过长的内容）
+      let bodyPreview = ''
+      if (body) {
+        const bodyStr = typeof body === 'string' ? body : JSON.stringify(body)
+        bodyPreview =
+          bodyStr.length > 1000 ? bodyStr.substring(0, 1000) + '...[truncated]' : bodyStr
+      }
+
+      // 提取错误消息
+      const errorMessage = this._extractErrorMessage(body)
+
+      // 记录错误详情
+      logger.warn('❌ [Error Response Detail]', {
+        type,
+        accountId,
+        statusCode,
+        errorMessage,
+        headers: relevantHeaders,
+        bodyPreview
+      })
+    } catch (error) {
+      logger.error('❌ Failed to log error response:', error)
+    }
+  }
+
+  /**
+   * 📝 记录流式响应的错误详情（仅记录状态码和头部，body需异步收集）
+   * @param {string} accountId - 账户ID
+   * @param {Object} res - HTTP响应流对象
+   * @param {string} type - 请求类型标识（如 'Streaming'）
+   */
+  _logErrorResponseStream(accountId, res, type) {
+    try {
+      const { statusCode, headers } = res
+
+      // 提取关键响应头
+      const relevantHeaders = {}
+      const headerKeys = [
+        'content-type',
+        'anthropic-ratelimit-unified-reset',
+        'anthropic-ratelimit-requests-remaining',
+        'anthropic-ratelimit-requests-limit',
+        'anthropic-ratelimit-tokens-remaining',
+        'anthropic-ratelimit-tokens-limit',
+        'retry-after',
+        'x-should-retry'
+      ]
+
+      if (headers && typeof headers === 'object') {
+        headerKeys.forEach((key) => {
+          const value = this._getHeaderValueCaseInsensitive(headers, key)
+          if (value !== undefined) {
+            relevantHeaders[key] = value
+          }
+        })
+      }
+
+      // 记录错误详情（响应体将在 res.on('end') 中异步记录）
+      logger.warn('❌ [Error Response Detail - Stream Start]', {
+        type,
+        accountId,
+        statusCode,
+        headers: relevantHeaders,
+        note: 'Response body will be logged when stream completes'
+      })
+    } catch (error) {
+      logger.error('❌ Failed to log stream error response:', error)
+    }
+  }
+
   // 🔍 判断是否是真实的 Claude Code 请求
   isRealClaudeCodeRequest(requestBody) {
     return ClaudeCodeValidator.includesClaudeCodeSystemPrompt(requestBody, 1)
@@ -647,6 +749,9 @@ class ClaudeRelayService {
 
       // 检查响应是否为限流错误或认证错误
       if (response.statusCode !== 200 && response.statusCode !== 201) {
+        // 📝 记录非200响应的详细信息（用于调试和错误分析）
+        this._logErrorResponse(accountId, response, 'Non-streaming')
+
         let isRateLimited = false
         let rateLimitResetTimestamp = null
         let dedicatedRateLimitMessage = null
@@ -1969,6 +2074,10 @@ class ClaudeRelayService {
               return // 重要：提前返回，不设置后续的错误处理器
             }
           }
+
+          // 📝 记录流式响应的错误详情（在具体错误处理之前）
+          // 注意：流式响应的 body 需要异步收集，这里先记录状态码和头部
+          this._logErrorResponseStream(accountId, res, 'Streaming')
 
           // 将错误处理逻辑封装在一个异步函数中
           const handleErrorResponse = async () => {
