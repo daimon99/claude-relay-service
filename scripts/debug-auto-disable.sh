@@ -75,6 +75,7 @@ ACCOUNT_TYPE_MAP["gemini-api"]="gemini_api_account"
 
 # 统计总数
 total_disabled=0
+total_inconsistent=0
 
 # 遍历每个账户类型
 for account_type in claude-console bedrock claude-official gemini openai-responses azure-openai droid ccr gemini-api; do
@@ -112,6 +113,20 @@ for account_type in claude-console bedrock claude-official gemini openai-respons
       last_attempt=$($REDIS_CMD HGET "${key_prefix}:${account_id}" lastAutoRecoveryAttempt 2>/dev/null)
       recovered_at=$($REDIS_CMD HGET "${key_prefix}:${account_id}" autoRecoveredAt 2>/dev/null)
       schedulable=$($REDIS_CMD HGET "${key_prefix}:${account_id}" schedulable 2>/dev/null)
+
+      # 检查数据一致性
+      if [ -z "$disabled_at" ] || [ -z "$disabled_reason" ]; then
+        total_inconsistent=$((total_inconsistent + 1))
+        echo -e "  ${RED}⚠️  数据不一致警告:${NC}"
+        echo -e "      账户在自动禁用索引中，但缺少必要字段"
+        echo -e "      这可能是手动禁用账户被错误添加到索引，或数据损坏"
+        echo ""
+        echo -e "  ${YELLOW}禁用类型:${NC} ❌ 未知（数据不一致）"
+        echo -e "  ${YELLOW}修复建议:${NC} 运行修复命令移除此账户"
+        echo -e "      redis-cli SREM auto_disabled_accounts:$account_type $account_id"
+      else
+        echo -e "  ${YELLOW}禁用类型:${NC} 🤖 自动禁用"
+      fi
 
       # 显示基本信息
       if [ -n "$disabled_at" ]; then
@@ -189,6 +204,9 @@ done
 echo -e "${CYAN}=========================================${NC}"
 echo -e "${YELLOW}📊 统计信息:${NC}"
 echo -e "  总计被禁用账户数: ${RED}${total_disabled}${NC}"
+if [ $total_inconsistent -gt 0 ]; then
+  echo -e "  ${RED}⚠️  数据不一致账户数: ${total_inconsistent}${NC}"
+fi
 echo -e "${CYAN}=========================================${NC}"
 echo -e "${GREEN}✅ 调试信息收集完成${NC}"
 echo -e "${CYAN}=========================================${NC}"
@@ -197,4 +215,13 @@ echo -e "${BLUE}💡 提示:${NC}"
 echo "  - 账户会在下次检测时自动尝试恢复（默认每60分钟）"
 echo "  - 可以手动修复账户凭据后等待自动恢复"
 echo "  - 也可以在 Web 界面点击 '测试连接' 手动触发检测"
+
+if [ $total_inconsistent -gt 0 ]; then
+  echo ""
+  echo -e "${RED}⚠️  修复数据不一致:${NC}"
+  echo "  检测到 $total_inconsistent 个账户数据不一致"
+  echo "  请运行上面显示的修复命令移除这些账户的索引"
+  echo "  或运行以下脚本自动修复："
+  echo "  ./scripts/fix-auto-disable-inconsistency.sh"
+fi
 echo ""
