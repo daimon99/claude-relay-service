@@ -153,6 +153,28 @@ async function sendStreamTestRequest(options) {
     const response = await axios(requestConfig)
     logger.debug(`🌊 Test response status: ${response.status}`)
 
+    // 📝 记录测试请求的基本信息（无论成功失败）
+    const relevantHeaders = {}
+    const headerKeys = [
+      'content-type',
+      'anthropic-ratelimit-unified-reset',
+      'anthropic-ratelimit-requests-remaining',
+      'anthropic-ratelimit-requests-limit',
+      'anthropic-ratelimit-tokens-remaining',
+      'anthropic-ratelimit-tokens-limit',
+      'retry-after',
+      'x-should-retry'
+    ]
+
+    if (response.headers && typeof response.headers === 'object') {
+      headerKeys.forEach((key) => {
+        const value = response.headers[key]
+        if (value !== undefined) {
+          relevantHeaders[key] = value
+        }
+      })
+    }
+
     // 处理非200响应
     if (response.status !== 200) {
       return new Promise((resolve) => {
@@ -160,19 +182,44 @@ async function sendStreamTestRequest(options) {
         response.data.on('data', (chunk) => chunks.push(chunk))
         response.data.on('end', () => {
           const errorData = Buffer.concat(chunks).toString()
+
+          // 提取错误消息
           let errorMsg = `API Error: ${response.status}`
+          let parsedError = null
           try {
             const json = JSON.parse(errorData)
+            parsedError = json
             errorMsg = json.message || json.error?.message || json.error || errorMsg
           } catch {
             if (errorData.length < 200) {
               errorMsg = errorData || errorMsg
             }
           }
+
+          // 截断过长的响应体用于日志
+          const bodyPreview =
+            errorData.length > 1000 ? errorData.substring(0, 1000) + '...[truncated]' : errorData
+
+          // 记录错误详情
+          logger.warn('❌ [Test Connection Error Response]', {
+            type: 'Connection Test',
+            apiUrl,
+            statusCode: response.status,
+            errorMessage: errorMsg,
+            headers: relevantHeaders,
+            bodyPreview,
+            fullError: parsedError
+          })
+
           endTest(false, errorMsg)
           resolve()
         })
         response.data.on('error', (err) => {
+          logger.error('❌ [Test Connection Stream Error]', {
+            type: 'Connection Test',
+            apiUrl,
+            error: err.message
+          })
           endTest(false, err.message)
           resolve()
         })
@@ -180,6 +227,13 @@ async function sendStreamTestRequest(options) {
     }
 
     // 处理成功的流式响应
+    logger.info('✅ [Test Connection Success]', {
+      type: 'Connection Test',
+      apiUrl,
+      statusCode: response.status,
+      headers: relevantHeaders
+    })
+
     return new Promise((resolve) => {
       let buffer = ''
 

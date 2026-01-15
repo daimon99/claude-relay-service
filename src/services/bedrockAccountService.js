@@ -594,7 +594,18 @@ class BedrockAccountService {
       }
 
       const duration = Date.now() - startTime
-      logger.info(`✅ Bedrock test completed - model: ${model}, duration: ${duration}ms`)
+
+      // 📝 记录成功的测试详情
+      logger.info(`✅ Bedrock test completed`, {
+        type: 'Bedrock Connection Test',
+        accountId,
+        accountName: account.name,
+        model,
+        region,
+        credentialType: account.credentialType,
+        duration: `${duration}ms`,
+        success: true
+      })
 
       // 发送 message_stop 事件（前端兼容）
       res.write(`data: ${JSON.stringify({ type: 'message_stop' })}\n\n`)
@@ -607,7 +618,24 @@ class BedrockAccountService {
 
       logger.info(`✅ Test request completed for Bedrock account: ${account.name}`)
     } catch (error) {
-      logger.error(`❌ Test Bedrock account connection failed:`, error)
+      // 📝 记录详细的错误信息
+      const errorDetails = {
+        type: 'Bedrock Connection Test',
+        accountId,
+        accountName: account?.name || 'unknown',
+        model,
+        region: account?.region || bedrockRelayService.defaultRegion,
+        credentialType: account?.credentialType || 'unknown',
+        errorName: error.name,
+        errorMessage: error.message,
+        statusCode: error.$metadata?.httpStatusCode || error.statusCode,
+        requestId: error.$metadata?.requestId,
+        errorCode: error.Code || error.code,
+        errorType: error.$fault,
+        retryable: error.$retryable
+      }
+
+      logger.error(`❌ Test Bedrock account connection failed:`, errorDetails)
 
       // 发送错误事件给前端
       try {
