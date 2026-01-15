@@ -345,6 +345,41 @@ class AutoRecoveryService {
   /**
    * 恢复账户可调度状态
    */
+  /**
+   * 从自动禁用状态恢复账户（手动测试成功后调用）
+   * @param {string} accountId - 账户 ID
+   * @param {string} accountType - 账户类型
+   * @returns {Promise<Object>} { recovered: boolean, reason: string }
+   */
+  async recoverAccountFromTest(accountId, accountType) {
+    try {
+      // 检查账户是否在自动禁用索引中
+      const isAutoDisabled = await redis.sismember(`auto_disabled_accounts:${accountType}`, accountId)
+
+      if (!isAutoDisabled) {
+        logger.debug(
+          `[Auto Recovery] Account ${accountId} (${accountType}) is not in auto-disabled index, skipping recovery`
+        )
+        return { recovered: false, reason: 'not_auto_disabled' }
+      }
+
+      // 恢复账户
+      await this._recoverAccount(accountId, accountType)
+
+      logger.info(
+        `✅ [Manual Recovery] Account ${accountId} (${accountType}) recovered from test connection success`
+      )
+
+      return { recovered: true, reason: 'test_success' }
+    } catch (error) {
+      logger.error(`❌ [Manual Recovery] Failed to recover account ${accountId}:`, error)
+      return { recovered: false, reason: 'error', error: error.message }
+    }
+  }
+
+  /**
+   * 恢复账户（内部方法）
+   */
   async _recoverAccount(accountId, accountType) {
     logger.info(`✅ [Auto Recovery] Recovering account ${accountId} (${accountType})`)
 

@@ -294,6 +294,23 @@ async function sendStreamTestRequest(options) {
       })
 
       response.data.on('end', () => {
+        // 测试成功，尝试恢复账户（如果之前被自动禁用）
+        if (accountId && accountType) {
+          const autoRecoveryService = require('../services/autoRecoveryService')
+          autoRecoveryService
+            .recoverAccountFromTest(accountId, accountType)
+            .then((result) => {
+              if (result.recovered) {
+                logger.info(
+                  `✅ [Test Recovery] Account ${accountId} (${accountType}) recovered after successful test`
+                )
+              }
+            })
+            .catch((err) => {
+              logger.error('❌ Failed to recover account after test success:', err)
+            })
+        }
+
         if (!responseStream.destroyed && !responseStream.writableEnded) {
           endTest(true)
         }
