@@ -924,7 +924,13 @@ async function getAllAccounts() {
               isRateLimited: false,
               rateLimitedAt: null,
               minutesRemaining: 0
-            }
+            },
+        // 自动禁用相关字段
+        autoDisabledAt: accountData.autoDisabledAt || null,
+        autoDisabledReason: accountData.autoDisabledReason || null,
+        autoDisabledDetails: accountData.autoDisabledDetails || null,
+        lastAutoRecoveryAttempt: accountData.lastAutoRecoveryAttempt || null,
+        autoRecoveredAt: accountData.autoRecoveredAt || null
       })
     }
   }

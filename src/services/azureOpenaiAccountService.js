@@ -359,7 +359,13 @@ async function getAllAccounts() {
 
         // ✅ 前端显示订阅过期时间（业务字段）
         expiresAt: accountData.subscriptionExpiresAt || null,
-        platform: 'azure-openai'
+        platform: 'azure-openai',
+        // 自动禁用相关字段
+        autoDisabledAt: accountData.autoDisabledAt || null,
+        autoDisabledReason: accountData.autoDisabledReason || null,
+        autoDisabledDetails: accountData.autoDisabledDetails || null,
+        lastAutoRecoveryAttempt: accountData.lastAutoRecoveryAttempt || null,
+        autoRecoveredAt: accountData.autoRecoveredAt || null
       })
     }
   }

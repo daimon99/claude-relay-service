@@ -270,6 +270,13 @@ class OpenAIResponsesAccountService {
           account.expiresAt = account.subscriptionExpiresAt || null
           account.platform = account.platform || 'openai-responses'
 
+          // 自动禁用相关字段
+          account.autoDisabledAt = account.autoDisabledAt || null
+          account.autoDisabledReason = account.autoDisabledReason || null
+          account.autoDisabledDetails = account.autoDisabledDetails || null
+          account.lastAutoRecoveryAttempt = account.lastAutoRecoveryAttempt || null
+          account.autoRecoveredAt = account.autoRecoveredAt || null
+
           accounts.push(account)
         }
       }
@@ -319,6 +326,13 @@ class OpenAIResponsesAccountService {
             // ✅ 前端显示订阅过期时间（业务字段）
             accountData.expiresAt = accountData.subscriptionExpiresAt || null
             accountData.platform = accountData.platform || 'openai-responses'
+
+            // 自动禁用相关字段
+            accountData.autoDisabledAt = accountData.autoDisabledAt || null
+            accountData.autoDisabledReason = accountData.autoDisabledReason || null
+            accountData.autoDisabledDetails = accountData.autoDisabledDetails || null
+            accountData.lastAutoRecoveryAttempt = accountData.lastAutoRecoveryAttempt || null
+            accountData.autoRecoveredAt = accountData.autoRecoveredAt || null
 
             accounts.push(accountData)
           }

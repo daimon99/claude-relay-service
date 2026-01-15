@@ -589,7 +589,13 @@ class ClaudeAccountService {
             // 账户级用户消息串行队列限制
             maxConcurrency: parseInt(account.maxConcurrency || '0', 10),
             // 拦截预热请求
-            interceptWarmup: account.interceptWarmup === 'true'
+            interceptWarmup: account.interceptWarmup === 'true',
+            // 自动禁用相关字段
+            autoDisabledAt: account.autoDisabledAt || null,
+            autoDisabledReason: account.autoDisabledReason || null,
+            autoDisabledDetails: account.autoDisabledDetails || null,
+            lastAutoRecoveryAttempt: account.lastAutoRecoveryAttempt || null,
+            autoRecoveredAt: account.autoRecoveredAt || null
           }
         })
       )

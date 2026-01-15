@@ -222,7 +222,14 @@ class ClaudeConsoleAccountService {
             activeTaskCount,
             disableAutoProtection: accountData.disableAutoProtection === 'true',
             // 拦截预热请求
-            interceptWarmup: accountData.interceptWarmup === 'true'
+            interceptWarmup: accountData.interceptWarmup === 'true',
+
+            // 自动禁用相关字段
+            autoDisabledAt: accountData.autoDisabledAt || null,
+            autoDisabledReason: accountData.autoDisabledReason || null,
+            autoDisabledDetails: accountData.autoDisabledDetails || null,
+            lastAutoRecoveryAttempt: accountData.lastAutoRecoveryAttempt || null,
+            autoRecoveredAt: accountData.autoRecoveredAt || null
           })
         }
       }

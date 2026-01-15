@@ -48,9 +48,11 @@ const ACCOUNT_ID = '2381be85-ee26-4454-a898-0324d53e8ef2'
       console.log('   这说明 getAccount 没有返回该字段')
     }
 
+    await redis.disconnect()
     process.exit(0)
   } catch (error) {
     console.error('❌ 测试失败:', error)
+    await redis.disconnect().catch(() => {})
     process.exit(1)
   }
 })()

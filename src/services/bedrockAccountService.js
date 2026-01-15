@@ -242,7 +242,13 @@ class BedrockAccountService {
             hasCredentials:
               account.credentialType === 'bearer_token'
                 ? !!account.bearerToken
-                : !!account.awsCredentials
+                : !!account.awsCredentials,
+            // 自动禁用相关字段
+            autoDisabledAt: account.autoDisabledAt || null,
+            autoDisabledReason: account.autoDisabledReason || null,
+            autoDisabledDetails: account.autoDisabledDetails || null,
+            lastAutoRecoveryAttempt: account.lastAutoRecoveryAttempt || null,
+            autoRecoveredAt: account.autoRecoveredAt || null
           })
         }
       }

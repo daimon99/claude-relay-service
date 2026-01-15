@@ -904,7 +904,13 @@ class DroidAccountService {
         }
         const numeric = Number(account.apiKeyCount)
         return Number.isFinite(numeric) && numeric >= 0 ? numeric : parsedCount
-      })()
+      })(),
+      // 自动禁用相关字段
+      autoDisabledAt: account.autoDisabledAt || null,
+      autoDisabledReason: account.autoDisabledReason || null,
+      autoDisabledDetails: account.autoDisabledDetails || null,
+      lastAutoRecoveryAttempt: account.lastAutoRecoveryAttempt || null,
+      autoRecoveredAt: account.autoRecoveredAt || null
     }))
   }
 

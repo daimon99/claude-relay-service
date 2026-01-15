@@ -179,7 +179,13 @@ class CcrAccountService {
             dailyUsage: parseFloat(accountData.dailyUsage || '0'),
             lastResetDate: accountData.lastResetDate || '',
             quotaResetTime: accountData.quotaResetTime || '00:00',
-            quotaStoppedAt: accountData.quotaStoppedAt || null
+            quotaStoppedAt: accountData.quotaStoppedAt || null,
+            // 自动禁用相关字段
+            autoDisabledAt: accountData.autoDisabledAt || null,
+            autoDisabledReason: accountData.autoDisabledReason || null,
+            autoDisabledDetails: accountData.autoDisabledDetails || null,
+            lastAutoRecoveryAttempt: accountData.lastAutoRecoveryAttempt || null,
+            autoRecoveredAt: accountData.autoRecoveredAt || null
           })
         }
       }
