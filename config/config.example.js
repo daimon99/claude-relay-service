@@ -220,6 +220,13 @@ const config = {
     delayMs: parseInt(process.env.USER_MESSAGE_QUEUE_DELAY_MS) || 200, // 请求间隔（毫秒）
     timeoutMs: parseInt(process.env.USER_MESSAGE_QUEUE_TIMEOUT_MS) || 5000, // 队列等待超时（毫秒），锁持有时间短，无需长等待
     lockTtlMs: parseInt(process.env.USER_MESSAGE_QUEUE_LOCK_TTL_MS) || 5000 // 锁TTL（毫秒），5秒足以覆盖请求发送
+  },
+
+  // 🔄 自动恢复配置
+  autoRecovery: {
+    enabled: process.env.AUTO_RECOVERY_ENABLED !== 'false', // 默认启用
+    intervalMinutes: parseInt(process.env.AUTO_RECOVERY_INTERVAL_MINUTES) || 60, // 检测间隔（分钟）
+    testTimeoutSeconds: parseInt(process.env.AUTO_RECOVERY_TEST_TIMEOUT_SECONDS) || 30 // 测试超时（秒）
   }
 }
 
