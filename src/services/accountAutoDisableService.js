@@ -27,6 +27,24 @@ class AccountAutoDisableService {
       return { disabled: false }
     }
 
+    // 检查是否应该跳过自动禁用（白名单）
+    const skipCheck = this._shouldSkipAutoDisable(errorMessage)
+    if (skipCheck.shouldSkip) {
+      logger.info(
+        `ℹ️ [Auto Disable] Skipping auto-disable for account ${accountId} (${accountType}) - ${skipCheck.reason}`,
+        {
+          accountId,
+          accountType,
+          statusCode,
+          errorMessage: errorMessage.substring(0, 200),
+          apiUrl,
+          triggerType,
+          skipReason: skipCheck.reason
+        }
+      )
+      return { disabled: false, skipped: true, reason: skipCheck.reason }
+    }
+
     logger.warn(
       `🚫 [Auto Disable] ${triggerType} - Account ${accountId} (${accountType}) encountered ${statusCode}, disabling`,
       {
@@ -65,6 +83,31 @@ class AccountAutoDisableService {
       logger.error(`❌ [Auto Disable] Failed to disable account ${accountId}:`, error)
       return { disabled: false, error: error.message }
     }
+  }
+
+  /**
+   * 检查是否应该跳过自动禁用（白名单检测）
+   * @param {string} errorMessage - 错误消息
+   * @returns {Object} { shouldSkip: boolean, reason: string }
+   */
+  _shouldSkipAutoDisable(errorMessage) {
+    // 检查是否包含 "Forbidden"
+    if (errorMessage.includes('Forbidden')) {
+      return {
+        shouldSkip: true,
+        reason: '错误类型为 Forbidden（模型类型不支持等，账户本身正常）'
+      }
+    }
+
+    // 检查是否包含 "model_not_found"
+    if (errorMessage.includes('model_not_found')) {
+      return {
+        shouldSkip: true,
+        reason: '错误类型为 model_not_found（模型渠道不可用，账户本身正常）'
+      }
+    }
+
+    return { shouldSkip: false }
   }
 
   /**
