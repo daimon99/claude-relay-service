@@ -107,6 +107,14 @@ class AccountAutoDisableService {
       }
     }
 
+    // 检查是否包含 "invalid_request_error"
+    if (errorMessage.includes('invalid_request_error')) {
+      return {
+        shouldSkip: true,
+        reason: '错误类型为 invalid_request_error（请求参数错误，账户本身正常）'
+      }
+    }
+
     return { shouldSkip: false }
   }
 
