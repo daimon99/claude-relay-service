@@ -80,7 +80,8 @@ class AutoRecoveryService {
 
     for (const accountType of accountTypes) {
       try {
-        const disabledAccountIds = await redis.smembers(`auto_disabled_accounts:${accountType}`)
+        const client = redis.getClientSafe()
+        const disabledAccountIds = await client.smembers(`auto_disabled_accounts:${accountType}`)
 
         if (!disabledAccountIds || disabledAccountIds.length === 0) {
           continue
@@ -182,7 +183,8 @@ class AutoRecoveryService {
    * 检查特定类型的所有禁用账户
    */
   async checkAccountType(accountType) {
-    const disabledAccountIds = await redis.smembers(`auto_disabled_accounts:${accountType}`)
+    const client = redis.getClientSafe()
+    const disabledAccountIds = await client.smembers(`auto_disabled_accounts:${accountType}`)
 
     if (!disabledAccountIds || disabledAccountIds.length === 0) {
       return { checked: 0, recovered: 0, failed: 0, cleaned: 0 }
@@ -275,7 +277,8 @@ class AutoRecoveryService {
 
     try {
       // 从自动禁用索引中移除
-      await redis.srem(`auto_disabled_accounts:${accountType}`, accountId)
+      const client = redis.getClientSafe()
+      await client.srem(`auto_disabled_accounts:${accountType}`, accountId)
 
       logger.info(
         `✅ [Auto Recovery] Removed inconsistent account ${accountId} (${accountType}) from auto-disabled index`
@@ -354,7 +357,8 @@ class AutoRecoveryService {
   async recoverAccountFromTest(accountId, accountType) {
     try {
       // 检查账户是否在自动禁用索引中
-      const isAutoDisabled = await redis.sIsMember(`auto_disabled_accounts:${accountType}`, accountId)
+      const client = redis.getClientSafe()
+      const isAutoDisabled = await client.sIsMember(`auto_disabled_accounts:${accountType}`, accountId)
 
       if (!isAutoDisabled) {
         logger.debug(
@@ -396,7 +400,8 @@ class AutoRecoveryService {
     await this._updateAccountByType(accountId, accountType, updates)
 
     // 从自动禁用索引中移除
-    await redis.srem(`auto_disabled_accounts:${accountType}`, accountId)
+    const client = redis.getClientSafe()
+    await client.srem(`auto_disabled_accounts:${accountType}`, accountId)
 
     logger.info(`✅ [Auto Recovery] Account ${accountId} (${accountType}) has been recovered`)
   }
