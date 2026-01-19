@@ -354,7 +354,7 @@ class AutoRecoveryService {
   async recoverAccountFromTest(accountId, accountType) {
     try {
       // 检查账户是否在自动禁用索引中
-      const isAutoDisabled = await redis.sismember(`auto_disabled_accounts:${accountType}`, accountId)
+      const isAutoDisabled = await redis.sIsMember(`auto_disabled_accounts:${accountType}`, accountId)
 
       if (!isAutoDisabled) {
         logger.debug(

@@ -339,7 +339,7 @@ class AccountGroupService {
       const allGroupIds = await client.smembers(this.GROUPS_KEY)
 
       for (const groupId of allGroupIds) {
-        const isMember = await client.sismember(`${this.GROUP_MEMBERS_PREFIX}${groupId}`, accountId)
+        const isMember = await client.sIsMember(`${this.GROUP_MEMBERS_PREFIX}${groupId}`, accountId)
         if (isMember) {
           return await this.getGroup(groupId)
         }
@@ -364,7 +364,7 @@ class AccountGroupService {
       const memberGroups = []
 
       for (const groupId of allGroupIds) {
-        const isMember = await client.sismember(`${this.GROUP_MEMBERS_PREFIX}${groupId}`, accountId)
+        const isMember = await client.sIsMember(`${this.GROUP_MEMBERS_PREFIX}${groupId}`, accountId)
         if (isMember) {
           const group = await this.getGroup(groupId)
           if (group) {
