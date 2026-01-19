@@ -1622,6 +1622,124 @@ class ClaudeConsoleAccountService {
       return false // 出错时默认返回可用，避免误阻断
     }
   }
+
+  // 🧪 测试账户连接（同步方法，用于自动恢复）
+  async testAccountConnection(accountId) {
+    const axios = require('axios')
+    const startTime = Date.now()
+
+    try {
+      // 获取账户信息
+      const account = await this.getAccount(accountId)
+      if (!account) {
+        return {
+          success: false,
+          error: 'Account not found',
+          timestamp: new Date().toISOString()
+        }
+      }
+
+      logger.info(
+        `🧪 Testing Claude Console account connection (sync): ${account.name} (${accountId})`
+      )
+
+      // 准备测试请求
+      const cleanUrl = account.apiUrl.replace(/\/$/, '')
+      const apiUrl = cleanUrl.endsWith('/v1/messages')
+        ? cleanUrl
+        : `${cleanUrl}/v1/messages`
+
+      const testPayload = {
+        model: 'claude-3-5-haiku-20241022',
+        max_tokens: 256,
+        messages: [
+          {
+            role: 'user',
+            content:
+              'Hello! Please respond with a simple greeting to confirm the connection is working.'
+          }
+        ],
+        stream: false
+      }
+
+      // 准备请求配置
+      const requestConfig = {
+        method: 'POST',
+        url: apiUrl,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${account.apiKey}`,
+          'anthropic-version': '2023-06-01'
+        },
+        data: testPayload,
+        timeout: 30000, // 30秒超时
+        validateStatus: (status) => status < 600 // 不抛出错误，手动处理状态码
+      }
+
+      // 添加 User-Agent（如果配置了）
+      if (account.userAgent) {
+        requestConfig.headers['User-Agent'] = account.userAgent
+      }
+
+      // 添加代理配置
+      if (account.proxy) {
+        const proxyAgent = this._createProxyAgent(account.proxy)
+        if (proxyAgent) {
+          requestConfig.httpAgent = proxyAgent
+          requestConfig.httpsAgent = proxyAgent
+        }
+      }
+
+      // 发送请求
+      const response = await axios(requestConfig)
+      const latencyMs = Date.now() - startTime
+
+      // 检查响应状态
+      if (response.status === 200) {
+        logger.info(
+          `✅ Test completed for Claude Console account: ${account.name} (${latencyMs}ms)`
+        )
+
+        return {
+          success: true,
+          latencyMs,
+          model: response.data.model || testPayload.model,
+          timestamp: new Date().toISOString()
+        }
+      } else {
+        // 非200状态码
+        const errorMessage = response.data?.error?.message || `HTTP ${response.status}`
+        logger.warn(
+          `⚠️ Test failed for Claude Console account: ${account.name} - Status ${response.status}: ${errorMessage}`
+        )
+
+        return {
+          success: false,
+          error: errorMessage,
+          statusCode: response.status,
+          latencyMs,
+          timestamp: new Date().toISOString()
+        }
+      }
+    } catch (error) {
+      const latencyMs = Date.now() - startTime
+      const errorMessage = error.response?.data?.error?.message || error.message
+      const statusCode = error.response?.status
+
+      logger.error(
+        `❌ Test account connection failed for Claude Console account ${accountId}:`,
+        errorMessage
+      )
+
+      return {
+        success: false,
+        error: errorMessage,
+        statusCode,
+        latencyMs,
+        timestamp: new Date().toISOString()
+      }
+    }
+  }
 }
 
 module.exports = new ClaudeConsoleAccountService()
