@@ -352,6 +352,7 @@ npm run setup  # 自动生成密钥并创建管理员账户
    - 排队计数泄漏：系统重启时自动清理，或访问 `/admin/concurrency-queue` DELETE 接口手动清理
    - Socket 身份验证失败：查看 `socket_changed` 统计，如果频繁发生，检查代理配置或客户端连接稳定性
    - 健康检查拒绝：查看 `rejected_overload` 统计，表示队列过载时的快速失败次数
+16. **自动禁用错误白名单**: 编辑 `src/services/accountAutoDisableService.js` 中的 `_shouldSkipAutoDisable()` 方法添加错误匹配规则
 
 ### 代理配置要求（并发请求排队）
 

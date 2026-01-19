@@ -115,6 +115,14 @@ class AccountAutoDisableService {
       }
     }
 
+    // 检查是否包含 "未知模型" 或 "请检查模型名称是否正确"
+    if (errorMessage.includes('未知模型') || errorMessage.includes('请检查模型名称是否正确')) {
+      return {
+        shouldSkip: true,
+        reason: '错误类型为未知模型（模型名称错误，账户本身正常）'
+      }
+    }
+
     return { shouldSkip: false }
   }
 
