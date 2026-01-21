@@ -28,7 +28,7 @@ class AccountAutoDisableService {
     }
 
     // 检查是否应该跳过自动禁用（白名单）
-    const skipCheck = this._shouldSkipAutoDisable(errorMessage)
+    const skipCheck = this._shouldSkipAutoDisable(errorMessage, statusCode, apiUrl)
     if (skipCheck.shouldSkip) {
       logger.info(
         `ℹ️ [Auto Disable] Skipping auto-disable for account ${accountId} (${accountType}) - ${skipCheck.reason}`,
@@ -88,9 +88,19 @@ class AccountAutoDisableService {
   /**
    * 检查是否应该跳过自动禁用（白名单检测）
    * @param {string} errorMessage - 错误消息
+   * @param {number} statusCode - HTTP 状态码
+   * @param {string} apiUrl - 请求的 API URL
    * @returns {Object} { shouldSkip: boolean, reason: string }
    */
-  _shouldSkipAutoDisable(errorMessage) {
+  _shouldSkipAutoDisable(errorMessage, statusCode, apiUrl) {
+    // 优先级1：检查 HTTP 525 (SSL 握手失败)
+    if (statusCode === 525) {
+      return {
+        shouldSkip: true,
+        reason: '错误类型为 HTTP 525 (SSL握手失败)，通常是临时网络/证书问题，账户本身正常'
+      }
+    }
+
     // 检查是否包含 "Forbidden"
     if (errorMessage.includes('Forbidden')) {
       return {
