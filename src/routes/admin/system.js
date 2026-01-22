@@ -256,6 +256,27 @@ router.get('/check-updates', authenticateAdmin, async (req, res) => {
   }
 })
 
+// ==================== 系统配置获取 ====================
+
+// 获取系统配置信息（公开接口，用于前端显示）
+router.get('/config', async (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      data: {
+        autoRecovery: {
+          enabled: config.autoRecovery?.enabled !== false,
+          intervalMinutes: config.autoRecovery?.intervalMinutes || 60,
+          testTimeoutSeconds: config.autoRecovery?.testTimeoutSeconds || 30
+        }
+      }
+    })
+  } catch (error) {
+    logger.error('❌ Failed to get system config:', error)
+    return res.status(500).json({ error: 'Failed to get system config', message: error.message })
+  }
+})
+
 // ==================== OEM 设置管理 ====================
 
 // 获取OEM设置（公开接口，用于显示）

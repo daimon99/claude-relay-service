@@ -2068,6 +2068,7 @@ const groupFilter = ref('all')
 const platformFilter = ref('all')
 const statusFilter = ref('all') // 状态过滤 (normal/rateLimited/other/all)
 const searchKeyword = ref('')
+const systemConfig = ref({ autoRecovery: { intervalMinutes: 60 } }) // 系统配置，从API获取
 const PAGE_SIZE_STORAGE_KEY = 'accountsPageSize'
 const getInitialPageSize = () => {
   const saved = localStorage.getItem(PAGE_SIZE_STORAGE_KEY)
@@ -3082,6 +3083,21 @@ const adjustPriority = async (account, delta) => {
     showToast(`更新优先级失败: ${error.message || '未知错误'}`, 'error')
   } finally {
     updatingPriorities.value.delete(account.id)
+  }
+}
+
+// 加载系统配置
+const loadSystemConfig = async () => {
+  try {
+    const res = await apiClient.get('/admin/system/config')
+    if (res?.success && res?.data) {
+      systemConfig.value = res.data
+    }
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to load system config:', error)
+    // 使用默认配置
+    systemConfig.value = { autoRecovery: { intervalMinutes: 60 } }
   }
 }
 
@@ -4176,7 +4192,7 @@ const getSchedulableReason = (account) => {
     let nextCheckInfo = ''
     if (account.lastAutoRecoveryAttempt) {
       const lastAttempt = new Date(account.lastAutoRecoveryAttempt)
-      const intervalMinutes = 60 // 默认60分钟，从配置读取
+      const intervalMinutes = systemConfig.value?.autoRecovery?.intervalMinutes || 60 // 从API配置读取，默认60分钟
       const nextCheck = new Date(lastAttempt.getTime() + intervalMinutes * 60 * 1000)
       const now = new Date()
 
@@ -4843,6 +4859,9 @@ const checkHorizontalScroll = () => {
 let resizeObserver = null
 
 onMounted(() => {
+  // 加载系统配置
+  loadSystemConfig()
+
   // 首次加载时强制刷新所有数据
   loadAccounts(true)
 

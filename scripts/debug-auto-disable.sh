@@ -163,12 +163,15 @@ for account_type in claude-console bedrock claude-official gemini openai-respons
       if [ -n "$last_attempt" ]; then
         echo -e "  ${CYAN}最后检测:${NC} $last_attempt"
 
-        # 计算距离下次检测的时间（假设间隔60分钟）
+        # 计算距离下次检测的时间（从环境变量读取间隔配置）
         if command -v date &> /dev/null; then
           last_timestamp=$(date -d "$last_attempt" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${last_attempt:0:19}" +%s 2>/dev/null)
           if [ -n "$last_timestamp" ]; then
             current_timestamp=$(date +%s)
-            next_check=$((last_timestamp + 3600)) # 60分钟 = 3600秒
+            # 从环境变量读取恢复间隔，默认60分钟
+            interval_minutes=${AUTO_RECOVERY_INTERVAL_MINUTES:-60}
+            interval_seconds=$((interval_minutes * 60))
+            next_check=$((last_timestamp + interval_seconds))
             time_diff=$((next_check - current_timestamp))
 
             if [ $time_diff -gt 0 ]; then
@@ -212,7 +215,8 @@ echo -e "${GREEN}✅ 调试信息收集完成${NC}"
 echo -e "${CYAN}=========================================${NC}"
 echo ""
 echo -e "${BLUE}💡 提示:${NC}"
-echo "  - 账户会在下次检测时自动尝试恢复（默认每60分钟）"
+interval_minutes=${AUTO_RECOVERY_INTERVAL_MINUTES:-60}
+echo "  - 账户会在下次检测时自动尝试恢复（间隔：每${interval_minutes}分钟）"
 echo "  - 可以手动修复账户凭据后等待自动恢复"
 echo "  - 也可以在 Web 界面点击 '测试连接' 手动触发检测"
 
