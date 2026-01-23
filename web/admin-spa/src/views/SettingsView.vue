@@ -1375,7 +1375,7 @@
                 智能兜底规则
               </h2>
               <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-                当模型不在定价表中时，系统会根据模型名称中的关键字自动选择合适的兜底价格：
+                当模型不在定价表中时，系统会根据模型名称中的关键字使用固定的兜底价格（确保计费一致性）：
               </p>
 
               <div class="space-y-3">
@@ -1391,25 +1391,20 @@
                     </span>
                   </div>
                   <p class="mb-2 text-sm text-gray-600 dark:text-gray-400">
-                    模型名包含 "haiku" 关键字时，使用
-                    <code
-                      class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-800 dark:bg-gray-700 dark:text-gray-200"
-                    >
-                      claude-3-5-haiku-latest
-                    </code>
-                    的价格
+                    模型名包含 "haiku" 关键字时，使用固定价格：输入 $1/MTok，输出 $5/MTok，缓存创建
+                    $1.25/MTok，缓存读取 $0.1/MTok
                   </p>
                   <div class="flex flex-wrap gap-2 text-xs">
                     <span class="text-gray-500 dark:text-gray-400">示例：</span>
                     <code
                       class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-300"
                     >
-                      claude-haiku-4
+                      claude-haiku-4-5-20251001
                     </code>
                     <code
                       class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-300"
                     >
-                      anthropic.claude-haiku-20260101
+                      claude-haiku-5
                     </code>
                   </div>
                 </div>
@@ -1426,13 +1421,8 @@
                     </span>
                   </div>
                   <p class="mb-2 text-sm text-gray-600 dark:text-gray-400">
-                    模型名包含 "sonnet" 关键字时，使用
-                    <code
-                      class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-800 dark:bg-gray-700 dark:text-gray-200"
-                    >
-                      claude-3-5-sonnet-latest
-                    </code>
-                    的价格
+                    模型名包含 "sonnet" 关键字时，使用固定价格：输入 $3/MTok，输出
+                    $15/MTok，缓存创建 $3.75/MTok，缓存读取 $0.3/MTok
                   </p>
                   <div class="flex flex-wrap gap-2 text-xs">
                     <span class="text-gray-500 dark:text-gray-400">示例：</span>
@@ -1461,25 +1451,20 @@
                     </span>
                   </div>
                   <p class="mb-2 text-sm text-gray-600 dark:text-gray-400">
-                    模型名包含 "opus" 关键字时，使用
-                    <code
-                      class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-800 dark:bg-gray-700 dark:text-gray-200"
-                    >
-                      claude-3-opus-latest
-                    </code>
-                    的价格
+                    模型名包含 "opus" 关键字时，使用固定价格：输入 $5/MTok，输出 $25/MTok，缓存创建
+                    $6.25/MTok，缓存读取 $0.5/MTok
                   </p>
                   <div class="flex flex-wrap gap-2 text-xs">
                     <span class="text-gray-500 dark:text-gray-400">示例：</span>
                     <code
                       class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-300"
                     >
-                      claude-opus-5
+                      claude-opus-4-5-20251101
                     </code>
                     <code
                       class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-300"
                     >
-                      anthropic.claude-opus-20260101
+                      claude-opus-5
                     </code>
                   </div>
                 </div>

@@ -115,52 +115,69 @@ modelName = 'us.anthropic.claude-haiku-3-5-v2:0'
 
 ## 智能兜底策略
 
-**新增功能**: 基于模型名称关键字的智能兜底机制。
+**新增功能**: 基于模型名称关键字的智能兜底机制，使用固定价格确保不同版本计费一致。
 
 ### 兜底规则
 
-当以上所有匹配策略都失败时，系统会根据模型名称中的关键字使用对应系列的最新版本价格：
+当以上所有匹配策略都失败时，系统会根据模型名称中的关键字使用固定的系列价格：
 
 #### 1. Haiku 系列兜底
 
 ```javascript
 if (modelName.toLowerCase().includes('haiku')) {
-  return pricingData['claude-3-5-haiku-latest']
+  return {
+    input_cost_per_token: 0.000001,              // $1/MTok
+    output_cost_per_token: 0.000005,             // $5/MTok
+    cache_creation_input_token_cost: 0.00000125, // $1.25/MTok
+    cache_read_input_token_cost: 0.0000001       // $0.1/MTok
+  }
 }
 ```
 
 **适用场景**:
 
-- `claude-haiku-4` → 使用 `claude-3-5-haiku-latest` 价格
-- `anthropic.claude-haiku-20260101` → 使用 `claude-3-5-haiku-latest` 价格
+- `claude-haiku-4-5-20251001` → 使用固定 Haiku 系列价格
+- `claude-haiku-5` → 使用固定 Haiku 系列价格
+- `anthropic.claude-haiku-20260101` → 使用固定 Haiku 系列价格
 - 任何包含 "haiku" 的未知模型
 
 #### 2. Opus 系列兜底
 
 ```javascript
 if (modelName.toLowerCase().includes('opus')) {
-  return pricingData['claude-3-opus-latest']
+  return {
+    input_cost_per_token: 0.000005,              // $5/MTok
+    output_cost_per_token: 0.000025,             // $25/MTok
+    cache_creation_input_token_cost: 0.00000625, // $6.25/MTok
+    cache_read_input_token_cost: 0.0000005       // $0.5/MTok
+  }
 }
 ```
 
 **适用场景**:
 
-- `claude-opus-5` → 使用 `claude-3-opus-latest` 价格
-- `us.anthropic.claude-opus-20260101` → 使用 `claude-3-opus-latest` 价格
+- `claude-opus-4-5-20251101` → 使用固定 Opus 系列价格
+- `claude-opus-5` → 使用固定 Opus 系列价格
+- `us.anthropic.claude-opus-20260101` → 使用固定 Opus 系列价格
 - 任何包含 "opus" 的未知模型
 
 #### 3. Sonnet 系列兜底
 
 ```javascript
 if (modelName.toLowerCase().includes('sonnet')) {
-  return pricingData['claude-3-5-sonnet-latest']
+  return {
+    input_cost_per_token: 0.000003,              // $3/MTok
+    output_cost_per_token: 0.000015,             // $15/MTok
+    cache_creation_input_token_cost: 0.00000375, // $3.75/MTok
+    cache_read_input_token_cost: 0.0000003       // $0.3/MTok
+  }
 }
 ```
 
 **适用场景**:
 
-- `claude-sonnet-5` → 使用 `claude-3-5-sonnet-latest` 价格
-- `anthropic.claude-sonnet-20260101` → 使用 `claude-3-5-sonnet-latest` 价格
+- `claude-sonnet-5` → 使用固定 Sonnet 系列价格
+- `anthropic.claude-sonnet-20260101` → 使用固定 Sonnet 系列价格
 - 任何包含 "sonnet" 的未知模型
 
 ### 优先级顺序
@@ -169,12 +186,23 @@ if (modelName.toLowerCase().includes('sonnet')) {
 
 这个顺序确保了最具体的匹配优先。注意系统使用 `includes()` 检查，因此如果模型名同时包含多个关键字（如 `claude-sonnet-opus`），会匹配到第一个命中的规则。
 
+### 固定价格的优势
+
+使用固定价格而非引用特定版本（如 `claude-3-5-haiku-latest`）的优点：
+
+1. **计费一致性**: 避免因不同版本价格差异导致历史数据重新计算时费用不一致
+2. **版本独立**: 不依赖具体版本存在于定价数据中
+3. **可预测性**: 新版本发布不会影响兜底价格
+4. **简化维护**: 无需频繁更新兜底规则
+
 ### 日志记录
 
 当使用兜底策略时，系统会记录 info 级别的日志：
 
 ```
-💰 Using claude-3-5-haiku-latest pricing as fallback for unknown haiku model: claude-haiku-4
+💰 Using fixed haiku series pricing as fallback for unknown model: claude-haiku-4-5-20251001
+💰 Using fixed opus series pricing as fallback for unknown model: claude-opus-4-5-20251101
+💰 Using fixed sonnet series pricing as fallback for unknown model: claude-sonnet-5
 ```
 
 ## 特殊价格处理

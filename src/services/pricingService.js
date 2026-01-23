@@ -443,35 +443,38 @@ class PricingService {
     }
 
     // Claude 模型系列智能兜底（基于模型名称中的关键字）
+    // 使用固定价格，避免因不同版本定价差异导致计费不一致
     const modelLower = modelName.toLowerCase()
 
     if (modelLower.includes('haiku')) {
-      const fallbackModel = 'claude-3-5-haiku-latest'
-      if (this.pricingData[fallbackModel]) {
-        logger.info(
-          `💰 Using ${fallbackModel} pricing as fallback for unknown haiku model: ${modelName}`
-        )
-        return this.pricingData[fallbackModel]
+      logger.info(`💰 Using fixed haiku series pricing as fallback for unknown model: ${modelName}`)
+      return {
+        input_cost_per_token: 0.000001, // $1/MTok
+        output_cost_per_token: 0.000005, // $5/MTok
+        cache_creation_input_token_cost: 0.00000125, // $1.25/MTok
+        cache_read_input_token_cost: 0.0000001 // $0.1/MTok
       }
     }
 
     if (modelLower.includes('opus')) {
-      const fallbackModel = 'claude-3-opus-latest'
-      if (this.pricingData[fallbackModel]) {
-        logger.info(
-          `💰 Using ${fallbackModel} pricing as fallback for unknown opus model: ${modelName}`
-        )
-        return this.pricingData[fallbackModel]
+      logger.info(`💰 Using fixed opus series pricing as fallback for unknown model: ${modelName}`)
+      return {
+        input_cost_per_token: 0.000005, // $5/MTok
+        output_cost_per_token: 0.000025, // $25/MTok
+        cache_creation_input_token_cost: 0.00000625, // $6.25/MTok
+        cache_read_input_token_cost: 0.0000005 // $0.5/MTok
       }
     }
 
     if (modelLower.includes('sonnet')) {
-      const fallbackModel = 'claude-3-5-sonnet-latest'
-      if (this.pricingData[fallbackModel]) {
-        logger.info(
-          `💰 Using ${fallbackModel} pricing as fallback for unknown sonnet model: ${modelName}`
-        )
-        return this.pricingData[fallbackModel]
+      logger.info(
+        `💰 Using fixed sonnet series pricing as fallback for unknown model: ${modelName}`
+      )
+      return {
+        input_cost_per_token: 0.000003, // $3/MTok
+        output_cost_per_token: 0.000015, // $15/MTok
+        cache_creation_input_token_cost: 0.00000375, // $3.75/MTok
+        cache_read_input_token_cost: 0.0000003 // $0.3/MTok
       }
     }
 
