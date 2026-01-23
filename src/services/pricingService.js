@@ -657,6 +657,84 @@ class PricingService {
     }
   }
 
+  /**
+   * 获取所有定价数据（用于管理界面展示）
+   * @returns {Object} 包含所有定价信息的对象
+   */
+  getAllPricingData() {
+    const result = {
+      status: this.getStatus(),
+      fallbackPricing: this._getFallbackPricing(),
+      models: []
+    }
+
+    if (!this.pricingData) {
+      return result
+    }
+
+    // 转换定价数据为更易读的格式
+    for (const [modelName, pricing] of Object.entries(this.pricingData)) {
+      // 跳过非模型数据
+      if (!pricing || typeof pricing !== 'object') continue
+
+      const modelInfo = {
+        model: modelName,
+        provider: pricing.litellm_provider || this._guessProvider(modelName),
+        inputPrice: pricing.input_cost_per_token ? pricing.input_cost_per_token * 1000000 : null, // 转换为每百万token价格
+        outputPrice: pricing.output_cost_per_token ? pricing.output_cost_per_token * 1000000 : null,
+        cacheWritePrice: pricing.cache_creation_input_token_cost
+          ? pricing.cache_creation_input_token_cost * 1000000
+          : null,
+        cacheReadPrice: pricing.cache_read_input_token_cost
+          ? pricing.cache_read_input_token_cost * 1000000
+          : null,
+        maxInputTokens: pricing.max_input_tokens || null,
+        maxOutputTokens: pricing.max_output_tokens || null,
+        maxTokens: pricing.max_tokens || null
+      }
+
+      result.models.push(modelInfo)
+    }
+
+    // 按模型名称排序
+    result.models.sort((a, b) => a.model.localeCompare(b.model))
+
+    return result
+  }
+
+  /**
+   * 获取兜底定价配置
+   * @returns {Object} 兜底定价配置
+   */
+  _getFallbackPricing() {
+    // 从 costCalculator 导入兜底价格（硬编码，保持一致性）
+    return {
+      unknown: {
+        input: 3.0, // $3/M tokens
+        output: 15.0, // $15/M tokens
+        cacheWrite: 3.75, // $3.75/M tokens
+        cacheRead: 0.3 // $0.3/M tokens
+      },
+      description: '当模型未在定价表中找到时，使用此兜底价格进行计算'
+    }
+  }
+
+  /**
+   * 根据模型名称猜测提供商
+   * @param {string} modelName - 模型名称
+   * @returns {string} 提供商名称
+   */
+  _guessProvider(modelName) {
+    const name = modelName.toLowerCase()
+    if (name.includes('claude') || name.includes('anthropic')) return 'anthropic'
+    if (name.includes('gpt') || name.includes('o1') || name.includes('o3')) return 'openai'
+    if (name.includes('gemini')) return 'google'
+    if (name.includes('llama') || name.includes('meta')) return 'meta'
+    if (name.includes('mistral')) return 'mistral'
+    if (name.includes('deepseek')) return 'deepseek'
+    return 'unknown'
+  }
+
   // 强制更新价格数据
   async forceUpdate() {
     try {

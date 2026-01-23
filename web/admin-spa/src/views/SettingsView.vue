@@ -60,6 +60,18 @@
             <i class="fas fa-balance-scale mr-2"></i>
             服务倍率
           </button>
+          <button
+            :class="[
+              'border-b-2 pb-2 text-sm font-medium transition-colors',
+              activeSection === 'pricing'
+                ? 'border-blue-500 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+            ]"
+            @click="activeSection = 'pricing'"
+          >
+            <i class="fas fa-dollar-sign mr-2"></i>
+            计费模型
+          </button>
         </nav>
       </div>
 
@@ -1206,6 +1218,283 @@
             </div>
           </div>
         </div>
+
+        <!-- 计费模型配置部分 -->
+        <div v-show="activeSection === 'pricing'">
+          <!-- 加载状态 -->
+          <div v-if="pricingLoading" class="py-12 text-center">
+            <div class="loading-spinner mx-auto mb-4"></div>
+            <p class="text-gray-500 dark:text-gray-400">正在加载定价数据...</p>
+          </div>
+
+          <div v-else>
+            <!-- 说明卡片 -->
+            <div
+              class="mb-6 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 p-6 dark:from-green-900/20 dark:to-emerald-900/20"
+            >
+              <div class="flex items-start">
+                <div
+                  class="mr-4 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-green-500 text-white"
+                >
+                  <i class="fas fa-info"></i>
+                </div>
+                <div>
+                  <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                    计费模型定价说明
+                  </h3>
+                  <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    系统从远程定价数据源获取模型价格，定期自动更新。当请求的模型不在定价表中时，将使用兜底价格进行费用计算。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 定价状态卡片 -->
+            <div
+              class="mb-6 rounded-lg bg-white/80 p-6 shadow-lg backdrop-blur-sm dark:bg-gray-800/80"
+            >
+              <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                  <i class="fas fa-chart-line mr-2 text-green-500"></i>
+                  定价状态
+                </h2>
+                <button
+                  class="rounded-lg bg-green-500 px-4 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-50"
+                  :disabled="pricingRefreshing"
+                  @click="refreshPricing"
+                >
+                  <i
+                    class="fas fa-sync-alt mr-2"
+                    :class="{ 'animate-spin': pricingRefreshing }"
+                  ></i>
+                  {{ pricingRefreshing ? '更新中...' : '刷新定价' }}
+                </button>
+              </div>
+
+              <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                  <div class="text-sm text-gray-500 dark:text-gray-400">状态</div>
+                  <div class="mt-1 flex items-center">
+                    <span
+                      class="mr-2 inline-block h-2 w-2 rounded-full"
+                      :class="pricingData.status?.initialized ? 'bg-green-500' : 'bg-red-500'"
+                    ></span>
+                    <span class="font-medium text-gray-900 dark:text-gray-100">
+                      {{ pricingData.status?.initialized ? '已初始化' : '未初始化' }}
+                    </span>
+                  </div>
+                </div>
+                <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                  <div class="text-sm text-gray-500 dark:text-gray-400">模型数量</div>
+                  <div class="mt-1 font-medium text-gray-900 dark:text-gray-100">
+                    {{ pricingData.status?.modelCount || 0 }}
+                  </div>
+                </div>
+                <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                  <div class="text-sm text-gray-500 dark:text-gray-400">上次更新</div>
+                  <div class="mt-1 font-medium text-gray-900 dark:text-gray-100">
+                    {{
+                      pricingData.status?.lastUpdated
+                        ? formatDateTime(pricingData.status.lastUpdated)
+                        : '从未'
+                    }}
+                  </div>
+                </div>
+                <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                  <div class="text-sm text-gray-500 dark:text-gray-400">下次更新</div>
+                  <div class="mt-1 font-medium text-gray-900 dark:text-gray-100">
+                    {{
+                      pricingData.status?.nextUpdate
+                        ? formatDateTime(pricingData.status.nextUpdate)
+                        : '未知'
+                    }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 兜底定价卡片 -->
+            <div
+              class="mb-6 rounded-lg bg-white/80 p-6 shadow-lg backdrop-blur-sm dark:bg-gray-800/80"
+            >
+              <h2 class="mb-4 text-lg font-semibold text-gray-800 dark:text-gray-200">
+                <i class="fas fa-parachute-box mr-2 text-amber-500"></i>
+                兜底定价
+              </h2>
+              <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                {{ pricingData.fallbackPricing?.description }}
+              </p>
+              <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-gray-200 dark:border-gray-700">
+                      <th class="py-2 text-left font-medium text-gray-700 dark:text-gray-300">
+                        类型
+                      </th>
+                      <th class="py-2 text-right font-medium text-gray-700 dark:text-gray-300">
+                        价格 ($/M tokens)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="border-b border-gray-100 dark:border-gray-700/50">
+                      <td class="py-2 text-gray-600 dark:text-gray-400">输入 (Input)</td>
+                      <td class="py-2 text-right font-mono text-gray-900 dark:text-gray-100">
+                        ${{ pricingData.fallbackPricing?.unknown?.input || 3.0 }}
+                      </td>
+                    </tr>
+                    <tr class="border-b border-gray-100 dark:border-gray-700/50">
+                      <td class="py-2 text-gray-600 dark:text-gray-400">输出 (Output)</td>
+                      <td class="py-2 text-right font-mono text-gray-900 dark:text-gray-100">
+                        ${{ pricingData.fallbackPricing?.unknown?.output || 15.0 }}
+                      </td>
+                    </tr>
+                    <tr class="border-b border-gray-100 dark:border-gray-700/50">
+                      <td class="py-2 text-gray-600 dark:text-gray-400">缓存写入 (Cache Write)</td>
+                      <td class="py-2 text-right font-mono text-gray-900 dark:text-gray-100">
+                        ${{ pricingData.fallbackPricing?.unknown?.cacheWrite || 3.75 }}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="py-2 text-gray-600 dark:text-gray-400">缓存读取 (Cache Read)</td>
+                      <td class="py-2 text-right font-mono text-gray-900 dark:text-gray-100">
+                        ${{ pricingData.fallbackPricing?.unknown?.cacheRead || 0.3 }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- 模型定价表格 -->
+            <div class="rounded-lg bg-white/80 p-6 shadow-lg backdrop-blur-sm dark:bg-gray-800/80">
+              <div class="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                  <i class="fas fa-list mr-2 text-blue-500"></i>
+                  模型定价列表
+                </h2>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <!-- 搜索框 -->
+                  <div class="relative">
+                    <input
+                      v-model="pricingSearchQuery"
+                      type="text"
+                      class="w-full rounded-lg border border-gray-300 px-4 py-2 pl-10 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 sm:w-64"
+                      placeholder="搜索模型名称..."
+                    />
+                    <i
+                      class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    ></i>
+                  </div>
+                  <!-- 提供商筛选 -->
+                  <select
+                    v-model="pricingProviderFilter"
+                    class="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                  >
+                    <option value="">全部提供商</option>
+                    <option v-for="provider in uniqueProviders" :key="provider" :value="provider">
+                      {{ provider }}
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- 表格 -->
+              <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-gray-200 dark:border-gray-700">
+                      <th
+                        class="whitespace-nowrap py-3 text-left font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        模型名称
+                      </th>
+                      <th
+                        class="whitespace-nowrap px-2 py-3 text-left font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        提供商
+                      </th>
+                      <th
+                        class="whitespace-nowrap px-2 py-3 text-right font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        输入 ($/M)
+                      </th>
+                      <th
+                        class="whitespace-nowrap px-2 py-3 text-right font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        输出 ($/M)
+                      </th>
+                      <th
+                        class="whitespace-nowrap px-2 py-3 text-right font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        缓存写入 ($/M)
+                      </th>
+                      <th
+                        class="whitespace-nowrap px-2 py-3 text-right font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        缓存读取 ($/M)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="model in filteredPricingModels"
+                      :key="model.model"
+                      class="border-b border-gray-100 hover:bg-gray-50 dark:border-gray-700/50 dark:hover:bg-gray-700/30"
+                    >
+                      <td
+                        class="max-w-xs truncate py-3 font-mono text-xs text-gray-900 dark:text-gray-100"
+                        :title="model.model"
+                      >
+                        {{ model.model }}
+                      </td>
+                      <td class="whitespace-nowrap px-2 py-3">
+                        <span
+                          class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                          :class="getProviderClass(model.provider)"
+                        >
+                          {{ model.provider }}
+                        </span>
+                      </td>
+                      <td
+                        class="whitespace-nowrap px-2 py-3 text-right font-mono text-gray-900 dark:text-gray-100"
+                      >
+                        {{ formatPrice(model.inputPrice) }}
+                      </td>
+                      <td
+                        class="whitespace-nowrap px-2 py-3 text-right font-mono text-gray-900 dark:text-gray-100"
+                      >
+                        {{ formatPrice(model.outputPrice) }}
+                      </td>
+                      <td
+                        class="whitespace-nowrap px-2 py-3 text-right font-mono text-gray-900 dark:text-gray-100"
+                      >
+                        {{ formatPrice(model.cacheWritePrice) }}
+                      </td>
+                      <td
+                        class="whitespace-nowrap px-2 py-3 text-right font-mono text-gray-900 dark:text-gray-100"
+                      >
+                        {{ formatPrice(model.cacheReadPrice) }}
+                      </td>
+                    </tr>
+                    <tr v-if="filteredPricingModels.length === 0">
+                      <td colspan="6" class="py-8 text-center text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-search mb-2 text-2xl"></i>
+                        <p>没有找到匹配的模型</p>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- 分页信息 -->
+              <div class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                显示 {{ filteredPricingModels.length }} /
+                {{ pricingData.models?.length || 0 }} 个模型
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1934,6 +2223,30 @@ const serviceRates = ref({
   updatedBy: null
 })
 
+// 定价数据配置
+const pricingLoading = ref(false)
+const pricingRefreshing = ref(false)
+const pricingSearchQuery = ref('')
+const pricingProviderFilter = ref('')
+const pricingData = ref({
+  status: {
+    initialized: false,
+    lastUpdated: null,
+    modelCount: 0,
+    nextUpdate: null
+  },
+  fallbackPricing: {
+    unknown: {
+      input: 3.0,
+      output: 15.0,
+      cacheWrite: 3.75,
+      cacheRead: 0.3
+    },
+    description: '当模型未在定价表中找到时，使用此兜底价格进行计算'
+  },
+  models: []
+})
+
 // 平台表单相关
 const showAddPlatformModal = ref(false)
 const editingPlatform = ref(null)
@@ -1975,6 +2288,8 @@ const sectionWatcher = watch(activeSection, async (newSection) => {
     await loadClaudeConfig()
   } else if (newSection === 'serviceRates') {
     await loadServiceRates()
+  } else if (newSection === 'pricing') {
+    await loadPricingData()
   }
 })
 
@@ -2291,6 +2606,119 @@ const loadServiceRates = async () => {
       serviceRatesLoading.value = false
     }
   }
+}
+
+// 加载定价数据
+const loadPricingData = async () => {
+  if (!isMounted.value) return
+  pricingLoading.value = true
+  try {
+    const response = await httpApis.getAdminPricingApi({
+      signal: abortController.value.signal
+    })
+    if (response.success && isMounted.value) {
+      pricingData.value = {
+        status: response.data?.status || pricingData.value.status,
+        fallbackPricing: response.data?.fallbackPricing || pricingData.value.fallbackPricing,
+        models: response.data?.models || []
+      }
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') return
+    if (!isMounted.value) return
+    console.error('加载定价数据失败:', error)
+  } finally {
+    if (isMounted.value) {
+      pricingLoading.value = false
+    }
+  }
+}
+
+// 刷新定价数据
+const refreshPricing = async () => {
+  if (!isMounted.value) return
+  pricingRefreshing.value = true
+  try {
+    const response = await httpApis.refreshAdminPricingApi({
+      signal: abortController.value.signal
+    })
+    if (isMounted.value) {
+      if (response.success) {
+        showToast('定价数据已更新', 'success')
+        // 重新加载定价数据
+        await loadPricingData()
+      } else {
+        showToast(response.message || '更新定价数据失败', 'warning')
+      }
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') return
+    if (!isMounted.value) return
+    showToast('更新定价数据失败', 'error')
+    console.error(error)
+  } finally {
+    if (isMounted.value) {
+      pricingRefreshing.value = false
+    }
+  }
+}
+
+// 定价相关计算属性
+const uniqueProviders = computed(() => {
+  const providers = new Set()
+  for (const model of pricingData.value.models || []) {
+    if (model.provider) {
+      providers.add(model.provider)
+    }
+  }
+  return Array.from(providers).sort()
+})
+
+const filteredPricingModels = computed(() => {
+  let models = pricingData.value.models || []
+
+  // 按搜索词过滤
+  if (pricingSearchQuery.value) {
+    const query = pricingSearchQuery.value.toLowerCase()
+    models = models.filter((m) => m.model.toLowerCase().includes(query))
+  }
+
+  // 按提供商过滤
+  if (pricingProviderFilter.value) {
+    models = models.filter((m) => m.provider === pricingProviderFilter.value)
+  }
+
+  return models
+})
+
+// 格式化价格显示
+const formatPrice = (price) => {
+  if (price === null || price === undefined) {
+    return '-'
+  }
+  if (price === 0) {
+    return '$0'
+  }
+  if (price < 0.01) {
+    return `$${price.toFixed(4)}`
+  }
+  if (price < 1) {
+    return `$${price.toFixed(3)}`
+  }
+  return `$${price.toFixed(2)}`
+}
+
+// 提供商样式类
+const getProviderClass = (provider) => {
+  const classes = {
+    anthropic: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
+    openai: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
+    google: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
+    meta: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300',
+    mistral: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300',
+    deepseek: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-300'
+  }
+  return classes[provider] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
 }
 
 // 保存服务倍率配置

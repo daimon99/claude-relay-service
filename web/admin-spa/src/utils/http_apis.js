@@ -328,6 +328,14 @@ export const getAdminServiceRatesApi = (config) =>
 export const updateAdminServiceRatesApi = (data, config) =>
   request({ url: '/admin/service-rates', method: 'PUT', data, ...config })
 
+// 模型定价
+export const getAdminPricingApi = (config) =>
+  request({ url: '/admin/pricing', method: 'GET', ...config })
+export const getAdminPricingStatusApi = (config) =>
+  request({ url: '/admin/pricing/status', method: 'GET', ...config })
+export const refreshAdminPricingApi = (config) =>
+  request({ url: '/admin/pricing/refresh', method: 'POST', ...config })
+
 // 系统
 export const checkUpdatesApi = () => request({ url: '/admin/check-updates', method: 'GET' })
 export const getClaudeCodeVersionApi = () =>
