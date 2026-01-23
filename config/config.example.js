@@ -123,7 +123,8 @@ const config = {
     tokenUsageRetention: parseInt(process.env.TOKEN_USAGE_RETENTION) || 2592000000, // 30天
     healthCheckInterval: parseInt(process.env.HEALTH_CHECK_INTERVAL) || 60000, // 1分钟
     timezone: process.env.SYSTEM_TIMEZONE || 'Asia/Shanghai', // 默认UTC+8（中国时区）
-    timezoneOffset: parseInt(process.env.TIMEZONE_OFFSET) || 8 // UTC偏移小时数，默认+8
+    timezoneOffset: parseInt(process.env.TIMEZONE_OFFSET) || 8, // UTC偏移小时数，默认+8
+    metricsWindow: parseInt(process.env.METRICS_WINDOW) || 5 // 实时指标统计窗口（分钟）
   },
 
   // 🎨 Web界面配置
@@ -227,6 +228,13 @@ const config = {
     enabled: process.env.AUTO_RECOVERY_ENABLED !== 'false', // 默认启用
     intervalMinutes: parseInt(process.env.AUTO_RECOVERY_INTERVAL_MINUTES) || 60, // 检测间隔（分钟）
     testTimeoutSeconds: parseInt(process.env.AUTO_RECOVERY_TEST_TIMEOUT_SECONDS) || 30 // 测试超时（秒）
+  },
+
+  // 🎫 额度卡兑换上限配置（防盗刷）
+  quotaCardLimits: {
+    enabled: process.env.QUOTA_CARD_LIMITS_ENABLED !== 'false', // 默认启用
+    maxExpiryDays: parseInt(process.env.QUOTA_CARD_MAX_EXPIRY_DAYS) || 90, // 最大有效期距今天数
+    maxTotalCostLimit: parseFloat(process.env.QUOTA_CARD_MAX_TOTAL_COST_LIMIT) || 1000 // 最大总额度（美元）
   }
 }
 
