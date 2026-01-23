@@ -442,6 +442,39 @@ class PricingService {
       }
     }
 
+    // Claude 模型系列智能兜底（基于模型名称中的关键字）
+    const modelLower = modelName.toLowerCase()
+
+    if (modelLower.includes('haiku')) {
+      const fallbackModel = 'claude-3-5-haiku-latest'
+      if (this.pricingData[fallbackModel]) {
+        logger.info(
+          `💰 Using ${fallbackModel} pricing as fallback for unknown haiku model: ${modelName}`
+        )
+        return this.pricingData[fallbackModel]
+      }
+    }
+
+    if (modelLower.includes('opus')) {
+      const fallbackModel = 'claude-3-opus-latest'
+      if (this.pricingData[fallbackModel]) {
+        logger.info(
+          `💰 Using ${fallbackModel} pricing as fallback for unknown opus model: ${modelName}`
+        )
+        return this.pricingData[fallbackModel]
+      }
+    }
+
+    if (modelLower.includes('sonnet')) {
+      const fallbackModel = 'claude-3-5-sonnet-latest'
+      if (this.pricingData[fallbackModel]) {
+        logger.info(
+          `💰 Using ${fallbackModel} pricing as fallback for unknown sonnet model: ${modelName}`
+        )
+        return this.pricingData[fallbackModel]
+      }
+    }
+
     logger.debug(`💰 No pricing found for model: ${modelName}`)
     return null
   }
