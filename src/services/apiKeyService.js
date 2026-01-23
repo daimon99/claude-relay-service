@@ -1698,9 +1698,20 @@ class ApiKeyService {
         }
         costInfo = pricingService.calculateCost(usageObject, model)
 
-        // 验证计算结果
-        if (!costInfo || typeof costInfo.totalCost !== 'number') {
-          logger.error(`❌ Invalid cost calculation result for model ${model}:`, costInfo)
+        // 验证计算结果：无效结果 或 有token使用但费用为0（说明定价缺失）
+        const needFallback =
+          !costInfo ||
+          typeof costInfo.totalCost !== 'number' ||
+          (costInfo.totalCost === 0 && totalTokens > 0 && costInfo.hasPricing === false)
+
+        if (needFallback) {
+          if (!costInfo || typeof costInfo.totalCost !== 'number') {
+            logger.error(`❌ Invalid cost calculation result for model ${model}:`, costInfo)
+          } else {
+            logger.warn(
+              `⚠️ PricingService has no pricing for model ${model}, falling back to CostCalculator`
+            )
+          }
           // 使用 CostCalculator 作为后备
           const CostCalculator = require('../utils/costCalculator')
           const fallbackCost = CostCalculator.calculateCost(usageObject, model)
