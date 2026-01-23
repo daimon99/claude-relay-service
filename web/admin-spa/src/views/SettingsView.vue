@@ -1366,6 +1366,140 @@
               </div>
             </div>
 
+            <!-- 智能兜底规则卡片 -->
+            <div
+              class="mb-6 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 p-6 dark:from-blue-900/20 dark:to-indigo-900/20"
+            >
+              <h2 class="mb-4 text-lg font-semibold text-gray-800 dark:text-gray-200">
+                <i class="fas fa-brain mr-2 text-blue-500"></i>
+                智能兜底规则
+              </h2>
+              <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                当模型不在定价表中时，系统会根据模型名称中的关键字自动选择合适的兜底价格：
+              </p>
+
+              <div class="space-y-3">
+                <!-- Haiku 系列 -->
+                <div class="rounded-lg bg-white/60 p-4 dark:bg-gray-800/60">
+                  <div class="mb-2 flex items-center">
+                    <i class="fas fa-bolt mr-2 text-green-500"></i>
+                    <span class="font-semibold text-gray-800 dark:text-gray-200">Haiku 系列</span>
+                    <span
+                      class="ml-2 rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                    >
+                      快速模型
+                    </span>
+                  </div>
+                  <p class="mb-2 text-sm text-gray-600 dark:text-gray-400">
+                    模型名包含 "haiku" 关键字时，使用
+                    <code
+                      class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+                    >
+                      claude-3-5-haiku-latest
+                    </code>
+                    的价格
+                  </p>
+                  <div class="flex flex-wrap gap-2 text-xs">
+                    <span class="text-gray-500 dark:text-gray-400">示例：</span>
+                    <code
+                      class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                    >
+                      claude-haiku-4
+                    </code>
+                    <code
+                      class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                    >
+                      anthropic.claude-haiku-20260101
+                    </code>
+                  </div>
+                </div>
+
+                <!-- Sonnet 系列 -->
+                <div class="rounded-lg bg-white/60 p-4 dark:bg-gray-800/60">
+                  <div class="mb-2 flex items-center">
+                    <i class="fas fa-star mr-2 text-blue-500"></i>
+                    <span class="font-semibold text-gray-800 dark:text-gray-200">Sonnet 系列</span>
+                    <span
+                      class="ml-2 rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                    >
+                      平衡模型
+                    </span>
+                  </div>
+                  <p class="mb-2 text-sm text-gray-600 dark:text-gray-400">
+                    模型名包含 "sonnet" 关键字时，使用
+                    <code
+                      class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+                    >
+                      claude-3-5-sonnet-latest
+                    </code>
+                    的价格
+                  </p>
+                  <div class="flex flex-wrap gap-2 text-xs">
+                    <span class="text-gray-500 dark:text-gray-400">示例：</span>
+                    <code
+                      class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                    >
+                      claude-sonnet-5
+                    </code>
+                    <code
+                      class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                    >
+                      us.anthropic.claude-sonnet-20260101
+                    </code>
+                  </div>
+                </div>
+
+                <!-- Opus 系列 -->
+                <div class="rounded-lg bg-white/60 p-4 dark:bg-gray-800/60">
+                  <div class="mb-2 flex items-center">
+                    <i class="fas fa-crown mr-2 text-purple-500"></i>
+                    <span class="font-semibold text-gray-800 dark:text-gray-200">Opus 系列</span>
+                    <span
+                      class="ml-2 rounded bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
+                    >
+                      旗舰模型
+                    </span>
+                  </div>
+                  <p class="mb-2 text-sm text-gray-600 dark:text-gray-400">
+                    模型名包含 "opus" 关键字时，使用
+                    <code
+                      class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+                    >
+                      claude-3-opus-latest
+                    </code>
+                    的价格
+                  </p>
+                  <div class="flex flex-wrap gap-2 text-xs">
+                    <span class="text-gray-500 dark:text-gray-400">示例：</span>
+                    <code
+                      class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                    >
+                      claude-opus-5
+                    </code>
+                    <code
+                      class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                    >
+                      anthropic.claude-opus-20260101
+                    </code>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                class="mt-4 rounded-lg border border-blue-200 bg-blue-50/50 p-3 dark:border-blue-800 dark:bg-blue-900/20"
+              >
+                <div class="flex items-start">
+                  <i class="fas fa-lightbulb mr-2 mt-0.5 text-blue-500"></i>
+                  <p class="text-xs text-gray-600 dark:text-gray-400">
+                    <span class="font-semibold text-gray-700 dark:text-gray-300">优先级说明：</span>
+                    智能兜底会在精确匹配、区域前缀处理、模糊匹配等策略都失败后才会启用。系统按 Haiku
+                    → Opus → Sonnet
+                    的顺序检查关键字。如果所有智能兜底都不匹配，将使用上方的通用兜底价格。
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <!-- 模型定价表格 -->
             <div class="rounded-lg bg-white/80 p-6 shadow-lg backdrop-blur-sm dark:bg-gray-800/80">
               <div class="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
