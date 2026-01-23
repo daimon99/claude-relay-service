@@ -101,6 +101,14 @@ class AccountAutoDisableService {
       }
     }
 
+    // 检查是否包含 "连接AI服务失败" 或 "relay: 连接AI服务失败"
+    if (errorMessage.includes('连接AI服务失败') || errorMessage.includes('relay: 连接AI服务失败')) {
+      return {
+        shouldSkip: true,
+        reason: '错误类型为连接AI服务失败（临时网络问题，账户本身正常）'
+      }
+    }
+
     // 检查是否包含 "Forbidden"
     if (errorMessage.includes('Forbidden')) {
       return {
