@@ -1014,6 +1014,8 @@ const copyAllCards = async () => {
     await navigator.clipboard.writeText(content)
     showToast('已复制所有卡号', 'success')
   } catch (error) {
+    // eslint-disable-next-line no-console
+
     console.error('Failed to copy:', error)
     showToast('复制失败', 'error')
   }

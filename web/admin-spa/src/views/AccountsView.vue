@@ -2068,6 +2068,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { showToast, copyText, formatNumber, formatRelativeTime } from '@/utils/tools'
 
 import * as httpApis from '@/utils/http_apis'
+import request from '@/utils/request'
 import AccountForm from '@/components/accounts/AccountForm.vue'
 import CcrAccountForm from '@/components/accounts/CcrAccountForm.vue'
 import AccountUsageDetailModal from '@/components/accounts/AccountUsageDetailModal.vue'
@@ -3122,7 +3123,11 @@ const adjustPriority = async (account, delta) => {
 
   try {
     const endpoint = getAccountUpdateEndpoint(account)
-    await apiClient.put(`${endpoint}/${account.id}`, { priority: newPriority })
+    await request({
+      url: `${endpoint}/${account.id}`,
+      method: 'PUT',
+      data: { priority: newPriority }
+    })
 
     // 刷新账户列表
     await loadAccounts(true)
@@ -3140,7 +3145,7 @@ const adjustPriority = async (account, delta) => {
 // 加载系统配置
 const loadSystemConfig = async () => {
   try {
-    const res = await apiClient.get('/admin/system/config')
+    const res = await request({ url: '/admin/system/config', method: 'GET' })
     if (res?.success && res?.data) {
       systemConfig.value = res.data
     }
@@ -3282,24 +3287,6 @@ const loadAccounts = async (forceReload = false) => {
     })
 
     if (openaiResponsesRaw.length > 0) {
-      let autoRecoveryConfigMap = {}
-      try {
-        const configsRes = await apiClient.get(
-          '/admin/openai-responses-accounts/auto-recovery-configs'
-        )
-        if (configsRes.success && Array.isArray(configsRes.data)) {
-          autoRecoveryConfigMap = configsRes.data.reduce((map, config) => {
-            if (config?.accountId) {
-              map[config.accountId] = config
-            }
-            return map
-          }, {})
-        }
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.debug('Failed to load auto-recovery configs:', error)
-      }
-
       const responsesAccounts = openaiResponsesRaw.map((acc) => {
         const boundApiKeysCount = counts.openaiAccountId?.[`responses:${acc.id}`] || 0
         return { ...acc, platform: 'openai-responses', boundApiKeysCount }

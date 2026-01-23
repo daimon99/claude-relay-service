@@ -1378,9 +1378,9 @@
                   <div class="relative">
                     <input
                       v-model="pricingSearchQuery"
-                      type="text"
                       class="w-full rounded-lg border border-gray-300 px-4 py-2 pl-10 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 sm:w-64"
                       placeholder="搜索模型名称..."
+                      type="text"
                     />
                     <i
                       class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -1478,7 +1478,7 @@
                       </td>
                     </tr>
                     <tr v-if="filteredPricingModels.length === 0">
-                      <td colspan="6" class="py-8 text-center text-gray-500 dark:text-gray-400">
+                      <td class="py-8 text-center text-gray-500 dark:text-gray-400" colspan="6">
                         <i class="fas fa-search mb-2 text-2xl"></i>
                         <p>没有找到匹配的模型</p>
                       </td>

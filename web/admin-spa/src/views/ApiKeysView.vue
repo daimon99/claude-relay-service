@@ -2584,6 +2584,8 @@ const loadUsedModels = async () => {
       availableModels.value = data.data || []
     }
   } catch (error) {
+    // eslint-disable-next-line no-console
+
     console.error('Failed to load used models:', error)
   }
 }
@@ -2764,6 +2766,8 @@ const loadPageStats = async () => {
       }
     }
   } catch (error) {
+    // eslint-disable-next-line no-console
+
     console.error('加载统计数据失败:', error)
     // 不显示 toast，避免打扰用户
   } finally {
@@ -2812,6 +2816,8 @@ const loadPageLastUsage = async () => {
       }
     }
   } catch (error) {
+    // eslint-disable-next-line no-console
+
     console.error('加载最后使用账号数据失败:', error)
     // 不显示 toast，避免打扰用户
   } finally {
@@ -2921,6 +2927,8 @@ const fetchCostSortStatus = async () => {
       scheduleNextCostSortStatusRefresh()
     }
   } catch (error) {
+    // eslint-disable-next-line no-console
+
     console.error('Failed to fetch cost sort status:', error)
   }
 }
