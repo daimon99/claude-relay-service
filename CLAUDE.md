@@ -428,6 +428,7 @@ npm run setup  # 自动生成密钥并创建管理员账户
 - 检查日志文件 `logs/claude-relay-*.log` 确认服务正常运行
 - 注意：当前项目缺少实际测试文件，建议补充单元测试和集成测试
 
+
 ### 开发工作流
 
 - **功能开发**: 始终从理解现有代码开始，重用已有的服务和模式
@@ -636,3 +637,9 @@ NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (\*.md) or README files. Only create documentation files if explicitly requested by the User.
 ALWAYS USING CHINESE to communicate with users.
+
+# 生产环境的连接与调试
+
+* 生产环境连接方式： ssh brweb01
+* 生产环境部署目录 /data/prd/claude-relay-service/app
+* 生产环境的redis监听本机的 6379 端口
