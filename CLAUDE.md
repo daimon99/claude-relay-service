@@ -643,3 +643,5 @@ ALWAYS USING CHINESE to communicate with users.
 * 生产环境连接方式： ssh brweb01
 * 生产环境部署目录 /data/prd/claude-relay-service/app
 * 生产环境的redis监听本机的 6379 端口
+* 生产环境服务重启方式： systemctl restart claude-relay-service
+* 生产环境构建web端： cd /data/prd/claude-relay-service/app; npm run build:web
