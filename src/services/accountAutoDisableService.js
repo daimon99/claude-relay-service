@@ -27,22 +27,41 @@ class AccountAutoDisableService {
       return { disabled: false }
     }
 
+    // 🔥 用户手动测试时：强制禁用，不检查白名单
+    // 因为这是用户主动确认的测试结果，应该严格处理
+    const forceDisable = triggerType === 'test'
+
     // 检查是否应该跳过自动禁用（白名单）
-    const skipCheck = this._shouldSkipAutoDisable(errorMessage, statusCode, apiUrl)
-    if (skipCheck.shouldSkip) {
+    // 但如果是用户手动测试，则忽略白名单
+    if (!forceDisable) {
+      const skipCheck = this._shouldSkipAutoDisable(errorMessage, statusCode, apiUrl)
+      if (skipCheck.shouldSkip) {
+        logger.info(
+          `ℹ️ [Auto Disable] Skipping auto-disable for account ${accountId} (${accountType}) - ${skipCheck.reason}`,
+          {
+            accountId,
+            accountType,
+            statusCode,
+            errorMessage: errorMessage.substring(0, 200),
+            apiUrl,
+            triggerType,
+            skipReason: skipCheck.reason
+          }
+        )
+        return { disabled: false, skipped: true, reason: skipCheck.reason }
+      }
+    } else {
       logger.info(
-        `ℹ️ [Auto Disable] Skipping auto-disable for account ${accountId} (${accountType}) - ${skipCheck.reason}`,
+        `🔥 [Auto Disable] Force disable (user test) for account ${accountId} (${accountType}) - bypassing whitelist`,
         {
           accountId,
           accountType,
           statusCode,
           errorMessage: errorMessage.substring(0, 200),
           apiUrl,
-          triggerType,
-          skipReason: skipCheck.reason
+          triggerType
         }
       )
-      return { disabled: false, skipped: true, reason: skipCheck.reason }
     }
 
     logger.warn(
