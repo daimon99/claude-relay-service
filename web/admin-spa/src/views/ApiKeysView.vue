@@ -2312,7 +2312,7 @@ const selectedTagCount = computed(() => {
 
 // 分页相关
 const currentPage = ref(1)
-// 从 localStorage 读取保存的每页显示条数，默认为 10
+// 从 localStorage 读取保存的每页显示条数，默认为 20
 const getInitialPageSize = () => {
   const saved = localStorage.getItem('apiKeysPageSize')
   if (saved) {
@@ -2322,7 +2322,7 @@ const getInitialPageSize = () => {
       return parsedSize
     }
   }
-  return 10
+  return 20
 }
 const pageSize = ref(getInitialPageSize())
 const pageSizeOptions = [10, 20, 50, 100]
