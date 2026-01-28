@@ -112,7 +112,14 @@ class AccountAutoDisableService {
    * @returns {Object} { shouldSkip: boolean, reason: string }
    */
   _shouldSkipAutoDisable(errorMessage, statusCode, apiUrl) {
-    // 优先级1：检查 HTTP 525 (SSL 握手失败)
+    // 优先级1：检查 HTTP 522 (连接超时) 和 HTTP 525 (SSL 握手失败)
+    if (statusCode === 522) {
+      return {
+        shouldSkip: true,
+        reason: '错误类型为 HTTP 522 (连接超时)，通常是临时网络问题，账户本身正常'
+      }
+    }
+
     if (statusCode === 525) {
       return {
         shouldSkip: true,
