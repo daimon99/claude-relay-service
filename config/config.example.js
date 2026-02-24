@@ -226,7 +226,7 @@ const config = {
   // 🔄 自动恢复配置
   autoRecovery: {
     enabled: process.env.AUTO_RECOVERY_ENABLED !== 'false', // 默认启用
-    intervalMinutes: parseInt(process.env.AUTO_RECOVERY_INTERVAL_MINUTES) || 60, // 检测间隔（分钟）
+    intervalMinutes: parseInt(process.env.AUTO_RECOVERY_INTERVAL_MINUTES) || 2, // 检测间隔（分钟）
     testTimeoutSeconds: parseInt(process.env.AUTO_RECOVERY_TEST_TIMEOUT_SECONDS) || 30 // 测试超时（秒）
   },
 
