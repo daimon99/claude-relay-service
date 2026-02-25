@@ -1,11 +1,12 @@
 const { v4: uuidv4 } = require('uuid')
 const crypto = require('crypto')
 const axios = require('axios')
-const redis = require('../models/redis')
-const logger = require('../utils/logger')
-const { maskToken } = require('../utils/tokenMask')
-const ProxyHelper = require('../utils/proxyHelper')
-const { createEncryptor, isTruthy } = require('../utils/commonHelper')
+const redis = require('../../models/redis')
+const logger = require('../../utils/logger')
+const { maskToken } = require('../../utils/tokenMask')
+const ProxyHelper = require('../../utils/proxyHelper')
+const { createEncryptor, isTruthy } = require('../../utils/commonHelper')
+const upstreamErrorHelper = require('../../utils/upstreamErrorHelper')
 
 /**
  * Droid 账户管理服务
@@ -476,7 +477,8 @@ class DroidAccountService {
       authenticationMethod = '',
       expiresIn = null,
       apiKeys = [],
-      userAgent = '' // 自定义 User-Agent
+      userAgent = '', // 自定义 User-Agent
+      disableAutoProtection = false // 是否关闭自动防护（429/401/400/529 不自动禁用）
     } = options
 
     const accountId = uuidv4()
@@ -753,7 +755,8 @@ class DroidAccountService {
       apiKeys: hasApiKeys ? JSON.stringify(apiKeyEntries) : '',
       apiKeyCount: hasApiKeys ? String(apiKeyEntries.length) : '0',
       apiKeyStrategy: hasApiKeys ? 'random_sticky' : '',
-      userAgent: userAgent || '' // 自定义 User-Agent
+      userAgent: userAgent || '', // 自定义 User-Agent
+      disableAutoProtection: disableAutoProtection.toString() // 关闭自动防护
     }
 
     await redis.setDroidAccount(accountId, accountData)
@@ -1539,6 +1542,66 @@ class DroidAccountService {
       await client.hset(`droid:account:${accountId}`, 'lastUsedAt', new Date().toISOString())
     } catch (error) {
       logger.warn(`⚠️ Failed to update lastUsedAt for Droid account ${accountId}:`, error)
+    }
+  }
+
+  // 🔄 重置Droid账户所有异常状态
+  async resetAccountStatus(accountId) {
+    try {
+      const accountData = await this.getAccount(accountId)
+      if (!accountData) {
+        throw new Error('Account not found')
+      }
+
+      const client = redis.getClientSafe()
+      const accountKey = `droid:account:${accountId}`
+
+      const updates = {
+        status: 'active',
+        errorMessage: '',
+        schedulable: 'true',
+        isActive: 'true'
+      }
+
+      const fieldsToDelete = [
+        'rateLimitedAt',
+        'rateLimitStatus',
+        'unauthorizedAt',
+        'unauthorizedCount',
+        'overloadedAt',
+        'overloadStatus',
+        'blockedAt',
+        'quotaStoppedAt'
+      ]
+
+      await client.hset(accountKey, updates)
+      await client.hdel(accountKey, ...fieldsToDelete)
+
+      logger.success(`Reset all error status for Droid account ${accountId}`)
+
+      // 清除临时不可用状态
+      await upstreamErrorHelper.clearTempUnavailable(accountId, 'droid').catch(() => {})
+
+      // 异步发送 Webhook 通知（忽略错误）
+      try {
+        const webhookNotifier = require('../../utils/webhookNotifier')
+        await webhookNotifier.sendAccountAnomalyNotification({
+          accountId,
+          accountName: accountData.name || accountId,
+          platform: 'droid',
+          status: 'recovered',
+          errorCode: 'STATUS_RESET',
+          reason: 'Account status manually reset',
+          timestamp: new Date().toISOString()
+        })
+      } catch (webhookError) {
+        logger.warn('Failed to send webhook notification for Droid status reset:', webhookError)
+      }
+
+      return { success: true, accountId }
+    } catch (error) {
+      logger.error(`❌ Failed to reset Droid account status: ${accountId}`, error)
+      throw error
     }
   }
 }

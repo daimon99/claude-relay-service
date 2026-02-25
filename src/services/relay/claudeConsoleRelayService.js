@@ -1,18 +1,19 @@
 const axios = require('axios')
 const { v4: uuidv4 } = require('uuid')
-const claudeConsoleAccountService = require('./claudeConsoleAccountService')
-const redis = require('../models/redis')
-const logger = require('../utils/logger')
-const config = require('../../config/config')
+const claudeConsoleAccountService = require('../account/claudeConsoleAccountService')
+const redis = require('../../models/redis')
+const logger = require('../../utils/logger')
+const config = require('../../../config/config')
 const {
   sanitizeUpstreamError,
   sanitizeErrorMessage,
   isAccountDisabledError
-} = require('../utils/errorSanitizer')
-const userMessageQueueService = require('./userMessageQueueService')
-const { isStreamWritable } = require('../utils/streamHelper')
-const { filterForClaude } = require('../utils/headerFilter')
-const accountAutoDisableService = require('./accountAutoDisableService')
+} = require('../../utils/errorSanitizer')
+const upstreamErrorHelper = require('../../utils/upstreamErrorHelper')
+const userMessageQueueService = require('../userMessageQueueService')
+const { isStreamWritable } = require('../../utils/streamHelper')
+const { filterForClaude } = require('../../utils/headerFilter')
+const accountAutoDisableService = require('../accountAutoDisableService')
 
 class ClaudeConsoleRelayService {
   constructor() {
@@ -351,7 +352,9 @@ class ClaudeConsoleRelayService {
           `🚫 Unauthorized error detected for Claude Console account ${accountId}${autoProtectionDisabled ? ' (auto-protection disabled, skipping status change)' : ''}`
         )
         if (!autoProtectionDisabled) {
-          await claudeConsoleAccountService.markAccountUnauthorized(accountId)
+          await upstreamErrorHelper
+            .markTempUnavailable(accountId, 'claude-console', 401)
+            .catch(() => {})
         }
       } else if (accountDisabledError) {
         logger.error(
@@ -374,6 +377,14 @@ class ClaudeConsoleRelayService {
 
         if (!autoProtectionDisabled) {
           await claudeConsoleAccountService.markAccountRateLimited(accountId)
+          await upstreamErrorHelper
+            .markTempUnavailable(
+              accountId,
+              'claude-console',
+              429,
+              upstreamErrorHelper.parseRetryAfter(response.headers)
+            )
+            .catch(() => {})
         }
       } else if (response.status === 529) {
         logger.warn(
@@ -381,6 +392,18 @@ class ClaudeConsoleRelayService {
         )
         if (!autoProtectionDisabled) {
           await claudeConsoleAccountService.markAccountOverloaded(accountId)
+          await upstreamErrorHelper
+            .markTempUnavailable(accountId, 'claude-console', 529)
+            .catch(() => {})
+        }
+      } else if (response.status >= 500) {
+        logger.warn(
+          `🔥 Server error (${response.status}) detected for Claude Console account ${accountId}${autoProtectionDisabled ? ' (auto-protection disabled, skipping status change)' : ''}`
+        )
+        if (!autoProtectionDisabled) {
+          await upstreamErrorHelper
+            .markTempUnavailable(accountId, 'claude-console', response.status)
+            .catch(() => {})
         }
       } else if (response.status === 200 || response.status === 201) {
         // 如果请求成功，检查并移除错误状态
@@ -848,7 +871,9 @@ class ClaudeConsoleRelayService {
                   `🚫 [Stream] Unauthorized error detected for Claude Console account ${accountId}${autoProtectionDisabled ? ' (auto-protection disabled, skipping status change)' : ''}`
                 )
                 if (!autoProtectionDisabled) {
-                  await claudeConsoleAccountService.markAccountUnauthorized(accountId)
+                  await upstreamErrorHelper
+                    .markTempUnavailable(accountId, 'claude-console', 401)
+                    .catch(() => {})
                 }
               } else if (accountDisabledError) {
                 logger.error(
@@ -871,6 +896,14 @@ class ClaudeConsoleRelayService {
                 })
                 if (!autoProtectionDisabled) {
                   await claudeConsoleAccountService.markAccountRateLimited(accountId)
+                  await upstreamErrorHelper
+                    .markTempUnavailable(
+                      accountId,
+                      'claude-console',
+                      429,
+                      upstreamErrorHelper.parseRetryAfter(response.headers)
+                    )
+                    .catch(() => {})
                 }
               } else if (response.status === 529) {
                 logger.warn(
@@ -878,6 +911,18 @@ class ClaudeConsoleRelayService {
                 )
                 if (!autoProtectionDisabled) {
                   await claudeConsoleAccountService.markAccountOverloaded(accountId)
+                  await upstreamErrorHelper
+                    .markTempUnavailable(accountId, 'claude-console', 529)
+                    .catch(() => {})
+                }
+              } else if (response.status >= 500) {
+                logger.warn(
+                  `🔥 [Stream] Server error (${response.status}) detected for Claude Console account ${accountId}${autoProtectionDisabled ? ' (auto-protection disabled, skipping status change)' : ''}`
+                )
+                if (!autoProtectionDisabled) {
+                  await upstreamErrorHelper
+                    .markTempUnavailable(accountId, 'claude-console', response.status)
+                    .catch(() => {})
                 }
               }
 
@@ -1279,16 +1324,37 @@ class ClaudeConsoleRelayService {
 
           // 检查错误状态
           if (error.response) {
+            const catchAutoProtectionDisabled =
+              account?.disableAutoProtection === true || account?.disableAutoProtection === 'true'
             if (error.response.status === 401) {
-              claudeConsoleAccountService.markAccountUnauthorized(accountId)
+              if (!catchAutoProtectionDisabled) {
+                upstreamErrorHelper
+                  .markTempUnavailable(accountId, 'claude-console', 401)
+                  .catch(() => {})
+              }
             } else if (error.response.status === 429) {
-              claudeConsoleAccountService.markAccountRateLimited(accountId)
-              // 检查是否因为超过每日额度
-              claudeConsoleAccountService.checkQuotaUsage(accountId).catch((err) => {
-                logger.error('❌ Failed to check quota after 429 error:', err)
-              })
+              if (!catchAutoProtectionDisabled) {
+                claudeConsoleAccountService.markAccountRateLimited(accountId)
+                // 检查是否因为超过每日额度
+                claudeConsoleAccountService.checkQuotaUsage(accountId).catch((err) => {
+                  logger.error('❌ Failed to check quota after 429 error:', err)
+                })
+                upstreamErrorHelper
+                  .markTempUnavailable(
+                    accountId,
+                    'claude-console',
+                    429,
+                    upstreamErrorHelper.parseRetryAfter(error.response.headers)
+                  )
+                  .catch(() => {})
+              }
             } else if (error.response.status === 529) {
-              claudeConsoleAccountService.markAccountOverloaded(accountId)
+              if (!catchAutoProtectionDisabled) {
+                claudeConsoleAccountService.markAccountOverloaded(accountId)
+                upstreamErrorHelper
+                  .markTempUnavailable(accountId, 'claude-console', 529)
+                  .catch(() => {})
+              }
             }
           }
 
@@ -1344,7 +1410,7 @@ class ClaudeConsoleRelayService {
   // 🕐 更新最后使用时间
   async _updateLastUsedTime(accountId) {
     try {
-      const client = require('../models/redis').getClientSafe()
+      const client = require('../../models/redis').getClientSafe()
       const accountKey = `claude_console_account:${accountId}`
       const exists = await client.exists(accountKey)
 
@@ -1423,7 +1489,7 @@ class ClaudeConsoleRelayService {
 
   // 🧪 测试账号连接（供Admin API使用）
   async testAccountConnection(accountId, responseStream) {
-    const { sendStreamTestRequest } = require('../utils/testPayloadHelper')
+    const { sendStreamTestRequest } = require('../../utils/testPayloadHelper')
 
     try {
       const account = await claudeConsoleAccountService.getAccount(accountId)

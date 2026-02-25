@@ -6,8 +6,8 @@
 const express = require('express')
 const router = express.Router()
 
-const claudeAccountService = require('../../services/claudeAccountService')
-const claudeRelayService = require('../../services/claudeRelayService')
+const claudeAccountService = require('../../services/account/claudeAccountService')
+const claudeRelayService = require('../../services/relay/claudeRelayService')
 const accountGroupService = require('../../services/accountGroupService')
 const accountTestSchedulerService = require('../../services/accountTestSchedulerService')
 const apiKeyService = require('../../services/apiKeyService')
@@ -415,6 +415,14 @@ router.get('/claude-accounts', authenticateAdmin, async (req, res) => {
                 output_tokens: usage.outputTokens,
                 cache_creation_input_tokens: usage.cacheCreateTokens,
                 cache_read_input_tokens: usage.cacheReadTokens
+              }
+
+              // 添加 cache_creation 子对象以支持精确 ephemeral 定价
+              if (usage.ephemeral5mTokens > 0 || usage.ephemeral1hTokens > 0) {
+                usageData.cache_creation = {
+                  ephemeral_5m_input_tokens: usage.ephemeral5mTokens,
+                  ephemeral_1h_input_tokens: usage.ephemeral1hTokens
+                }
               }
 
               logger.debug(`💰 Calculating cost for model ${modelName}:`, JSON.stringify(usageData))

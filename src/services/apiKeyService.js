@@ -161,7 +161,9 @@ class ApiKeyService {
       activationUnit = 'days', // 新增：激活时间单位 'hours' 或 'days'
       expirationMode = 'fixed', // 新增：过期模式 'fixed'(固定时间) 或 'activation'(首次使用后激活)
       icon = '', // 新增：图标（base64编码）
-      serviceRates = {} // API Key 级别服务倍率覆盖
+      serviceRates = {}, // API Key 级别服务倍率覆盖
+      weeklyResetDay = 1, // 周费用重置日 (1=周一 ... 7=周日)
+      weeklyResetHour = 0 // 周费用重置时 (0-23)
     } = options
 
     // 生成简单的API Key (64字符十六进制)
@@ -211,7 +213,9 @@ class ApiKeyService {
       userId: options.userId || '',
       userUsername: options.userUsername || '',
       icon: icon || '', // 新增：图标（base64编码）
-      serviceRates: JSON.stringify(serviceRates || {}) // API Key 级别服务倍率
+      serviceRates: JSON.stringify(serviceRates || {}), // API Key 级别服务倍率
+      weeklyResetDay: String(weeklyResetDay || 1), // 周费用重置日 (1-7)
+      weeklyResetHour: String(weeklyResetHour || 0) // 周费用重置时 (0-23)
     }
 
     // 保存API Key数据并建立哈希映射
@@ -373,8 +377,12 @@ class ApiKeyService {
         costQueries.push(redis.getCostStats(keyData.id).then((v) => ({ totalCost: v?.total || 0 })))
       }
       if (weeklyOpusCostLimit > 0) {
+        const resetDay = parseInt(keyData.weeklyResetDay || 1)
+        const resetHour = parseInt(keyData.weeklyResetHour || 0)
         costQueries.push(
-          redis.getWeeklyOpusCost(keyData.id).then((v) => ({ weeklyOpusCost: v || 0 }))
+          redis
+            .getWeeklyOpusCost(keyData.id, resetDay, resetHour)
+            .then((v) => ({ weeklyOpusCost: v || 0 }))
         )
       }
 
@@ -449,6 +457,8 @@ class ApiKeyService {
           dailyCost: costData.dailyCost || 0,
           totalCost: costData.totalCost || 0,
           weeklyOpusCost: costData.weeklyOpusCost || 0,
+          weeklyResetDay: parseInt(keyData.weeklyResetDay || 1),
+          weeklyResetHour: parseInt(keyData.weeklyResetHour || 0),
           tags,
           serviceRates
         }
@@ -577,7 +587,12 @@ class ApiKeyService {
           weeklyOpusCostLimit: parseFloat(keyData.weeklyOpusCostLimit || 0),
           dailyCost: dailyCost || 0,
           totalCost: costStats?.total || 0,
-          weeklyOpusCost: (await redis.getWeeklyOpusCost(keyData.id)) || 0,
+          weeklyOpusCost:
+            (await redis.getWeeklyOpusCost(
+              keyData.id,
+              parseInt(keyData.weeklyResetDay || 1),
+              parseInt(keyData.weeklyResetHour || 0)
+            )) || 0,
           tags,
           usage
         }
@@ -762,7 +777,7 @@ class ApiKeyService {
       for (const key of apiKeys) {
         key.usage = await redis.getUsageStats(key.id)
         const costStats = await redis.getCostStats(key.id)
-        // Add cost information to usage object for frontend compatibility
+        // 为前端兼容性：把费用信息同步到 usage 对象里
         if (key.usage && costStats) {
           key.usage.total = key.usage.total || {}
           key.usage.total.cost = costStats.total
@@ -783,7 +798,12 @@ class ApiKeyService {
         key.totalCostLimit = parseFloat(key.totalCostLimit || 0)
         key.weeklyOpusCostLimit = parseFloat(key.weeklyOpusCostLimit || 0)
         key.dailyCost = (await redis.getDailyCost(key.id)) || 0
-        key.weeklyOpusCost = (await redis.getWeeklyOpusCost(key.id)) || 0
+        key.weeklyOpusCost =
+          (await redis.getWeeklyOpusCost(
+            key.id,
+            parseInt(key.weeklyResetDay || 1),
+            parseInt(key.weeklyResetHour || 0)
+          )) || 0
         key.activationDays = parseInt(key.activationDays || 0)
         key.activationUnit = key.activationUnit || 'days'
         key.expirationMode = key.expirationMode || 'fixed'
@@ -1215,7 +1235,9 @@ class ApiKeyService {
         'userId', // 新增：用户ID（所有者变更）
         'userUsername', // 新增：用户名（所有者变更）
         'createdBy', // 新增：创建者（所有者变更）
-        'serviceRates' // API Key 级别服务倍率
+        'serviceRates', // API Key 级别服务倍率
+        'weeklyResetDay', // 周费用重置日 (1-7)
+        'weeklyResetHour' // 周费用重置时 (0-23)
       ]
       const updatedData = { ...keyData }
 
@@ -1599,6 +1621,8 @@ class ApiKeyService {
             outputTokens,
             cacheCreateTokens,
             cacheReadTokens,
+            0, // ephemeral5mTokens - recordUsage 不含详细缓存数据
+            0, // ephemeral1hTokens - recordUsage 不含详细缓存数据
             model,
             isLongContextRequest
           )
@@ -1638,12 +1662,15 @@ class ApiKeyService {
       logParts.push(`Total: ${totalTokens} tokens`)
 
       logger.database(`📊 Recorded usage: ${keyId} - ${logParts.join(', ')}`)
+
+      return { realCost, ratedCost }
     } catch (error) {
       logger.error('❌ Failed to record usage:', error)
+      return { realCost: 0, ratedCost: 0 }
     }
   }
 
-  // 📊 记录 Opus 模型费用（仅限 claude 和 claude-console 账户）
+  // 📊 记录 Opus 模型费用（仅限 claude 和 claude-console 账户，支持自定义重置周期）
   // ratedCost: 倍率后的成本（用于限额校验）
   // realCost: 真实成本（用于对账），如果不传则等于 ratedCost
   async recordOpusCost(keyId, ratedCost, realCost, model, accountType) {
@@ -1660,8 +1687,13 @@ class ApiKeyService {
         return // 不是 claude 账户，直接返回
       }
 
+      // 获取 key 的重置配置
+      const keyData = await redis.getApiKey(keyId)
+      const resetDay = parseInt(keyData?.weeklyResetDay || 1)
+      const resetHour = parseInt(keyData?.weeklyResetHour || 0)
+
       // 记录 Opus 周费用（倍率成本和真实成本）
-      await redis.incrementWeeklyOpusCost(keyId, ratedCost, realCost)
+      await redis.incrementWeeklyOpusCost(keyId, ratedCost, realCost, resetDay, resetHour)
       logger.database(
         `💰 Recorded Opus weekly cost for ${keyId}: rated=$${ratedCost.toFixed(6)}, real=$${realCost.toFixed(6)}, model: ${model}`
       )
@@ -1845,6 +1877,8 @@ class ApiKeyService {
             outputTokens,
             cacheCreateTokens,
             cacheReadTokens,
+            ephemeral5mTokens,
+            ephemeral1hTokens,
             model,
             costInfo.isLongContextRequest || false
           )
@@ -1938,8 +1972,11 @@ class ApiKeyService {
         // 发布失败不影响主流程，只记录错误
         logger.warn('⚠️ Failed to publish billing event:', err.message)
       })
+
+      return { realCost: realCostWithDetails, ratedCost: ratedCostWithDetails }
     } catch (error) {
       logger.error('❌ Failed to record usage:', error)
+      return { realCost: 0, ratedCost: 0 }
     }
   }
 

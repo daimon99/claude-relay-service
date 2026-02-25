@@ -1,16 +1,17 @@
 const express = require('express')
 const apiKeyService = require('../../services/apiKeyService')
-const claudeAccountService = require('../../services/claudeAccountService')
-const claudeConsoleAccountService = require('../../services/claudeConsoleAccountService')
-const bedrockAccountService = require('../../services/bedrockAccountService')
-const ccrAccountService = require('../../services/ccrAccountService')
-const geminiAccountService = require('../../services/geminiAccountService')
-const droidAccountService = require('../../services/droidAccountService')
-const openaiResponsesAccountService = require('../../services/openaiResponsesAccountService')
+const claudeAccountService = require('../../services/account/claudeAccountService')
+const claudeConsoleAccountService = require('../../services/account/claudeConsoleAccountService')
+const bedrockAccountService = require('../../services/account/bedrockAccountService')
+const ccrAccountService = require('../../services/account/ccrAccountService')
+const geminiAccountService = require('../../services/account/geminiAccountService')
+const droidAccountService = require('../../services/account/droidAccountService')
+const openaiResponsesAccountService = require('../../services/account/openaiResponsesAccountService')
 const redis = require('../../models/redis')
 const { authenticateAdmin } = require('../../middleware/auth')
 const logger = require('../../utils/logger')
 const CostCalculator = require('../../utils/costCalculator')
+const upstreamErrorHelper = require('../../utils/upstreamErrorHelper')
 const config = require('../../../config/config')
 
 const router = express.Router()
@@ -352,6 +353,17 @@ router.get('/dashboard', authenticateAdmin, async (req, res) => {
   }
 })
 
+// 获取所有临时不可用账户状态
+router.get('/temp-unavailable', authenticateAdmin, async (req, res) => {
+  try {
+    const statuses = await upstreamErrorHelper.getAllTempUnavailable()
+    return res.json({ success: true, data: statuses })
+  } catch (error) {
+    logger.error('❌ Failed to get temp unavailable statuses:', error)
+    return res.status(500).json({ error: 'Failed to get temp unavailable statuses' })
+  }
+})
+
 // 获取使用统计
 router.get('/usage-stats', authenticateAdmin, async (req, res) => {
   try {
@@ -472,7 +484,9 @@ router.get('/model-stats', authenticateAdmin, async (req, res) => {
           outputTokens: 0,
           cacheCreateTokens: 0,
           cacheReadTokens: 0,
-          allTokens: 0
+          allTokens: 0,
+          ephemeral5mTokens: 0,
+          ephemeral1hTokens: 0
         }
 
         stats.requests += parseInt(data.requests) || 0
@@ -481,6 +495,8 @@ router.get('/model-stats', authenticateAdmin, async (req, res) => {
         stats.cacheCreateTokens += parseInt(data.cacheCreateTokens) || 0
         stats.cacheReadTokens += parseInt(data.cacheReadTokens) || 0
         stats.allTokens += parseInt(data.allTokens) || 0
+        stats.ephemeral5mTokens += parseInt(data.ephemeral5mTokens) || 0
+        stats.ephemeral1hTokens += parseInt(data.ephemeral1hTokens) || 0
 
         modelStatsMap.set(normalizedModel, stats)
       }
@@ -495,6 +511,14 @@ router.get('/model-stats', authenticateAdmin, async (req, res) => {
         output_tokens: stats.outputTokens,
         cache_creation_input_tokens: stats.cacheCreateTokens,
         cache_read_input_tokens: stats.cacheReadTokens
+      }
+
+      // 如果有 ephemeral 5m/1h 拆分数据，添加 cache_creation 子对象以实现精确计费
+      if (stats.ephemeral5mTokens > 0 || stats.ephemeral1hTokens > 0) {
+        usage.cache_creation = {
+          ephemeral_5m_input_tokens: stats.ephemeral5mTokens,
+          ephemeral_1h_input_tokens: stats.ephemeral1hTokens
+        }
       }
 
       // 计算费用

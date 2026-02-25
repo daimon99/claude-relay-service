@@ -1,8 +1,8 @@
-const redis = require('../models/redis')
-const balanceScriptService = require('./balanceScriptService')
-const logger = require('../utils/logger')
-const CostCalculator = require('../utils/costCalculator')
-const { isBalanceScriptEnabled } = require('../utils/featureFlags')
+const redis = require('../../models/redis')
+const balanceScriptService = require('../balanceScriptService')
+const logger = require('../../utils/logger')
+const CostCalculator = require('../../utils/costCalculator')
+const { isBalanceScriptEnabled } = require('../../utils/featureFlags')
 
 class AccountBalanceService {
   constructor(options = {}) {
@@ -605,6 +605,16 @@ class AccountBalanceService {
             output_tokens: parseInt(data.outputTokens || 0),
             cache_creation_input_tokens: parseInt(data.cacheCreateTokens || 0),
             cache_read_input_tokens: parseInt(data.cacheReadTokens || 0)
+          }
+
+          // 如果有 ephemeral 5m/1h 拆分数据，添加 cache_creation 子对象以实现精确计费
+          const eph5m = parseInt(data.ephemeral5mTokens || 0)
+          const eph1h = parseInt(data.ephemeral1hTokens || 0)
+          if (eph5m > 0 || eph1h > 0) {
+            usage.cache_creation = {
+              ephemeral_5m_input_tokens: eph5m,
+              ephemeral_1h_input_tokens: eph1h
+            }
           }
 
           const costResult = CostCalculator.calculateCost(usage, model)

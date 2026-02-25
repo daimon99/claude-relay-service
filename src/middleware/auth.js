@@ -1266,19 +1266,16 @@ const authenticateApiKey = async (req, res, next) => {
             }), cost: $${weeklyOpusCost.toFixed(2)}/$${weeklyOpusCostLimit}`
           )
 
-          // 计算下周一的重置时间
-          const now = new Date()
-          const dayOfWeek = now.getDay()
-          const daysUntilMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek) % 7 || 7
-          const resetDate = new Date(now)
-          resetDate.setDate(now.getDate() + daysUntilMonday)
-          resetDate.setHours(0, 0, 0, 0)
+          // 计算下次重置时间（基于 API Key 配置的重置日/时）
+          const resetDay = validation.keyData.weeklyResetDay || 1
+          const resetHour = validation.keyData.weeklyResetHour || 0
+          const resetDate = redis.getNextResetTime(resetDay, resetHour)
 
           // 使用 402 Payment Required 而非 429，避免客户端自动重试
           return res.status(402).json({
             error: {
               type: 'insufficient_quota',
-              message: `已达到 Opus 模型周费用限制 ($${weeklyOpusCostLimit})`,
+              message: `已达到 Claude 模型周费用限制 ($${weeklyOpusCostLimit})`,
               code: 'weekly_opus_cost_limit_exceeded'
             },
             currentCost: weeklyOpusCost,
@@ -1451,6 +1448,7 @@ const authenticateAdmin = async (req, res, next) => {
     }
 
     const authDuration = Date.now() - startTime
+    req._authInfo = `${adminSession.username} ${authDuration}ms`
     logger.security(`Admin authenticated: ${adminSession.username} in ${authDuration}ms`)
 
     return next()
@@ -1593,6 +1591,7 @@ const authenticateUserOrAdmin = async (req, res, next) => {
             req.userType = 'admin'
 
             const authDuration = Date.now() - startTime
+            req._authInfo = `${adminSession.username} ${authDuration}ms`
             logger.security(`Admin authenticated: ${adminSession.username} in ${authDuration}ms`)
             return next()
           }
@@ -1773,67 +1772,80 @@ const requestLogger = (req, res, next) => {
   const userAgent = req.get('User-Agent') || 'unknown'
   const referer = req.get('Referer') || 'none'
 
-  // 记录请求开始
+  // 请求开始 → debug 级别（减少正常请求的日志量）
   const isDebugRoute = req.originalUrl.includes('event_logging')
   if (req.originalUrl !== '/health') {
-    if (isDebugRoute) {
-      logger.debug(`▶️ [${requestId}] ${req.method} ${req.originalUrl} | IP: ${clientIP}`)
-    } else {
-      logger.info(`▶️ [${requestId}] ${req.method} ${req.originalUrl} | IP: ${clientIP}`)
-    }
+    logger.debug(`▶ [${requestId}] ${req.method} ${req.originalUrl}`, {
+      ip: clientIP,
+      body: req.body && Object.keys(req.body).length > 0 ? req.body : undefined
+    })
+  }
+
+  // 拦截 res.json() 捕获响应体
+  const originalJson = res.json.bind(res)
+  res.json = (body) => {
+    res._responseBody = body
+    return originalJson(body)
   }
 
   res.on('finish', () => {
+    if (req.originalUrl === '/health') {
+      return
+    }
     const duration = Date.now() - start
     const contentLength = res.get('Content-Length') || '0'
+    const status = res.statusCode
 
-    // 构建日志元数据
-    const logMetadata = {
-      requestId,
-      method: req.method,
-      url: req.originalUrl,
-      status: res.statusCode,
-      duration,
-      contentLength,
-      ip: clientIP,
-      userAgent,
-      referer
+    // 状态 emoji
+    const emoji = status >= 500 ? '❌' : status >= 400 ? '⚠️ ' : '🟢'
+    const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info'
+
+    // 主消息行
+    const msg = `${emoji} ${status} ${req.method} ${req.originalUrl}  ${duration}ms ${contentLength}B`
+
+    // 构建树形 metadata
+    const meta = { requestId }
+
+    // 请求体（非 GET 且有内容时显示）
+    if (req.method !== 'GET' && req.body && Object.keys(req.body).length > 0) {
+      meta.req = req.body
     }
 
-    // 根据状态码选择日志级别
-    if (res.statusCode >= 500) {
-      logger.error(
-        `◀️ [${requestId}] ${req.method} ${req.originalUrl} | ${res.statusCode} | ${duration}ms | ${contentLength}B`,
-        logMetadata
-      )
-    } else if (res.statusCode >= 400) {
-      logger.warn(
-        `◀️ [${requestId}] ${req.method} ${req.originalUrl} | ${res.statusCode} | ${duration}ms | ${contentLength}B`,
-        logMetadata
-      )
-    } else if (req.originalUrl !== '/health') {
-      if (isDebugRoute) {
-        logger.debug(
-          `🟢 ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`,
-          logMetadata
-        )
-      } else {
-        logger.request(req.method, req.originalUrl, res.statusCode, duration, logMetadata)
-      }
+    // 查询参数（GET 请求且有查询参数时单独显示）
+    const queryIdx = req.originalUrl.indexOf('?')
+    if (queryIdx > -1) {
+      meta.query = req.originalUrl.substring(queryIdx + 1)
     }
 
-    // API Key相关日志
+    // 响应体
+    if (res._responseBody) {
+      meta.res = res._responseBody
+    }
+
+    // API Key 信息（合并到同一条日志）
     if (req.apiKey) {
-      logger.api(
-        `📱 [${requestId}] Request from ${req.apiKey.name} (${req.apiKey.id}) | ${duration}ms`
-      )
+      meta.key = `${req.apiKey.name} (${req.apiKey.id})`
+    }
+
+    // 认证信息
+    if (req._authInfo) {
+      meta.auth = req._authInfo
+    }
+
+    // 完整信息写入文件
+    meta.ip = clientIP
+    meta.ua = userAgent
+    meta.referer = referer
+
+    if (isDebugRoute) {
+      logger.debug(msg, meta)
+    } else {
+      logger[level](msg, meta)
     }
 
     // 慢请求警告
     if (duration > 5000) {
-      logger.warn(
-        `🐌 [${requestId}] Slow request detected: ${duration}ms for ${req.method} ${req.originalUrl}`
-      )
+      logger.warn(`🐌 Slow request: ${duration}ms ${req.method} ${req.originalUrl}`)
     }
   })
 

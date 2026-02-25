@@ -1029,8 +1029,13 @@ router.post('/api-keys/batch-stats', authenticateAdmin, async (req, res) => {
             cost: 0,
             formattedCost: '$0.00',
             dailyCost: 0,
+            weeklyOpusCost: 0,
             currentWindowCost: 0,
+            currentWindowRequests: 0,
+            currentWindowTokens: 0,
             windowRemainingSeconds: null,
+            windowStartTime: null,
+            windowEndTime: null,
             allTimeCost: 0,
             error: error.message
           }
@@ -1088,9 +1093,8 @@ async function calculateKeyStats(keyId, timeRange, startDate, endDate) {
     const currentMonth = `${tzDate.getUTCFullYear()}-${String(tzDate.getUTCMonth() + 1).padStart(2, '0')}`
     searchPatterns.push(`usage:${keyId}:model:monthly:*:${currentMonth}`)
   } else {
-    // all - 获取所有数据（日和月数据都查）
-    searchPatterns.push(`usage:${keyId}:model:daily:*`)
-    searchPatterns.push(`usage:${keyId}:model:monthly:*`)
+    // all - 使用 alltime key（无 TTL，数据完整），避免 daily/monthly 键过期导致数据丢失
+    searchPatterns.push(`usage:${keyId}:model:alltime:*`)
   }
 
   // 使用 SCAN 收集所有匹配的 keys
@@ -1104,12 +1108,15 @@ async function calculateKeyStats(keyId, timeRange, startDate, endDate) {
     } while (cursor !== '0')
   }
 
-  // 去重（避免日数据和月数据重复计算）
+  // 去重
   const uniqueKeys = [...new Set(allKeys)]
 
   // 获取实时限制数据（窗口数据不受时间范围筛选影响，始终获取当前窗口状态）
   let dailyCost = 0
+  let weeklyOpusCost = 0 // 字段名沿用 weeklyOpusCost*，语义为"Claude 周费用"
   let currentWindowCost = 0
+  let currentWindowRequests = 0 // 当前窗口请求次数
+  let currentWindowTokens = 0 // 当前窗口 Token 使用量
   let windowRemainingSeconds = null
   let windowStartTime = null
   let windowEndTime = null
@@ -1120,19 +1127,25 @@ async function calculateKeyStats(keyId, timeRange, startDate, endDate) {
     const apiKey = await redis.getApiKey(keyId)
     const rateLimitWindow = parseInt(apiKey?.rateLimitWindow) || 0
     const dailyCostLimit = parseFloat(apiKey?.dailyCostLimit) || 0
-    const totalCostLimit = parseFloat(apiKey?.totalCostLimit) || 0
+    const weeklyOpusCostLimit = parseFloat(apiKey?.weeklyOpusCostLimit) || 0
 
     // 只在启用了每日费用限制时查询
     if (dailyCostLimit > 0) {
       dailyCost = await redis.getDailyCost(keyId)
     }
 
-    // 🔧 FIX: 始终查询 allTimeCost，因为它是实时累加的历史总费用
-    // 无论是否启用总费用限制，都应该返回给前端展示
+    // 始终查询 allTimeCost（用于展示和限额校验）
     const totalCostKey = `usage:cost:total:${keyId}`
     allTimeCost = parseFloat((await client.get(totalCostKey)) || '0')
 
-    // 🔧 FIX: 对于 "全部时间" 时间范围，直接使用 allTimeCost
+    // 只在启用了 Claude 周费用限制时查询（字段名沿用 weeklyOpusCostLimit）
+    if (weeklyOpusCostLimit > 0) {
+      const resetDay = parseInt(apiKey?.weeklyResetDay || 1)
+      const resetHour = parseInt(apiKey?.weeklyResetHour || 0)
+      weeklyOpusCost = await redis.getWeeklyOpusCost(keyId, resetDay, resetHour)
+    }
+
+    // 对于 "全部时间" 时间范围，直接使用 allTimeCost
     // 因为 usage:*:model:daily:* 键有 30 天 TTL，旧数据已经过期
     // 重新计算会因为数据缺失导致结果不准确，且可能因定价算法变化导致差异
     if (timeRange === 'all' && allTimeCost > 0) {
@@ -1159,9 +1172,13 @@ async function calculateKeyStats(keyId, timeRange, startDate, endDate) {
 
     // 只在启用了窗口限制时查询窗口数据
     if (rateLimitWindow > 0) {
+      const requestCountKey = `rate_limit:requests:${keyId}`
+      const tokenCountKey = `rate_limit:tokens:${keyId}`
       const costCountKey = `rate_limit:cost:${keyId}`
       const windowStartKey = `rate_limit:window_start:${keyId}`
 
+      currentWindowRequests = parseInt((await client.get(requestCountKey)) || '0')
+      currentWindowTokens = parseInt((await client.get(tokenCountKey)) || '0')
       currentWindowCost = parseFloat((await client.get(costCountKey)) || '0')
 
       // 获取窗口开始时间和计算剩余时间
@@ -1178,12 +1195,27 @@ async function calculateKeyStats(keyId, timeRange, startDate, endDate) {
         } else {
           // 窗口已过期
           windowRemainingSeconds = 0
+          currentWindowRequests = 0
+          currentWindowTokens = 0
           currentWindowCost = 0
         }
       }
     }
   } catch (error) {
     logger.warn(`⚠️ 获取实时限制数据失败 (key: ${keyId}):`, error.message)
+  }
+
+  // 构建实时限制数据对象（各分支复用）
+  const limitData = {
+    dailyCost,
+    weeklyOpusCost,
+    currentWindowCost,
+    currentWindowRequests,
+    currentWindowTokens,
+    windowRemainingSeconds,
+    windowStartTime,
+    windowEndTime,
+    allTimeCost
   }
 
   // 如果没有使用数据，返回零值但包含窗口数据
@@ -1196,14 +1228,9 @@ async function calculateKeyStats(keyId, timeRange, startDate, endDate) {
       cacheCreateTokens: 0,
       cacheReadTokens: 0,
       cost: 0,
+      realCost: 0,
       formattedCost: '$0.00',
-      // 实时限制数据（始终返回，不受时间范围影响）
-      dailyCost,
-      currentWindowCost,
-      windowRemainingSeconds,
-      windowStartTime,
-      windowEndTime,
-      allTimeCost
+      ...limitData
     }
   }
 
@@ -1218,10 +1245,13 @@ async function calculateKeyStats(keyId, timeRange, startDate, endDate) {
   const modelStatsMap = new Map()
   let totalRequests = 0
 
+  // alltime key 的模式：usage:{keyId}:model:alltime:{model}
+  const alltimeKeyPattern = /usage:.+:model:alltime:(.+)$/
   // 用于去重：先统计月数据，避免与日数据重复
   const dailyKeyPattern = /usage:.+:model:daily:(.+):\d{4}-\d{2}-\d{2}$/
   const monthlyKeyPattern = /usage:.+:model:monthly:(.+):\d{4}-\d{2}$/
   const currentMonth = `${tzDate.getUTCFullYear()}-${String(tzDate.getUTCMonth() + 1).padStart(2, '0')}`
+  const isAlltimeQuery = timeRange === 'all'
 
   for (let i = 0; i < results.length; i++) {
     const [err, data] = results[i]
@@ -1234,27 +1264,37 @@ async function calculateKeyStats(keyId, timeRange, startDate, endDate) {
     let isMonthly = false
 
     // 提取模型名称
-    const dailyMatch = key.match(dailyKeyPattern)
-    const monthlyMatch = key.match(monthlyKeyPattern)
+    if (isAlltimeQuery) {
+      const alltimeMatch = key.match(alltimeKeyPattern)
+      if (alltimeMatch) {
+        model = alltimeMatch[1]
+      }
+    } else {
+      const dailyMatch = key.match(dailyKeyPattern)
+      const monthlyMatch = key.match(monthlyKeyPattern)
 
-    if (dailyMatch) {
-      model = dailyMatch[1]
-    } else if (monthlyMatch) {
-      model = monthlyMatch[1]
-      isMonthly = true
+      if (dailyMatch) {
+        model = dailyMatch[1]
+      } else if (monthlyMatch) {
+        model = monthlyMatch[1]
+        isMonthly = true
+      }
     }
 
     if (!model) {
       continue
     }
 
-    // 跳过当前月的月数据
-    if (isMonthly && key.includes(`:${currentMonth}`)) {
-      continue
-    }
-    // 跳过非当前月的日数据
-    if (!isMonthly && !key.includes(`:${currentMonth}-`)) {
-      continue
+    // 日/月去重逻辑（alltime 不需要去重）
+    if (!isAlltimeQuery) {
+      // 跳过当前月的月数据（当前月用日数据更精确）
+      if (isMonthly && key.includes(`:${currentMonth}`)) {
+        continue
+      }
+      // 跳过非当前月的日数据（非当前月用月数据）
+      if (!isMonthly && !key.includes(`:${currentMonth}-`)) {
+        continue
+      }
     }
 
     if (!modelStatsMap.has(model)) {
@@ -1263,7 +1303,12 @@ async function calculateKeyStats(keyId, timeRange, startDate, endDate) {
         outputTokens: 0,
         cacheCreateTokens: 0,
         cacheReadTokens: 0,
-        requests: 0
+        ephemeral5mTokens: 0,
+        ephemeral1hTokens: 0,
+        requests: 0,
+        realCostMicro: 0,
+        ratedCostMicro: 0,
+        hasStoredCost: false
       })
     }
 
@@ -1274,13 +1319,25 @@ async function calculateKeyStats(keyId, timeRange, startDate, endDate) {
       parseInt(data.totalCacheCreateTokens) || parseInt(data.cacheCreateTokens) || 0
     stats.cacheReadTokens +=
       parseInt(data.totalCacheReadTokens) || parseInt(data.cacheReadTokens) || 0
+    stats.ephemeral5mTokens +=
+      parseInt(data.totalEphemeral5mTokens) || parseInt(data.ephemeral5mTokens) || 0
+    stats.ephemeral1hTokens +=
+      parseInt(data.totalEphemeral1hTokens) || parseInt(data.ephemeral1hTokens) || 0
     stats.requests += parseInt(data.totalRequests) || parseInt(data.requests) || 0
+
+    // 累加已存储的费用（微美元）
+    if ('realCostMicro' in data || 'ratedCostMicro' in data) {
+      stats.realCostMicro += parseInt(data.realCostMicro) || 0
+      stats.ratedCostMicro += parseInt(data.ratedCostMicro) || 0
+      stats.hasStoredCost = true
+    }
 
     totalRequests += parseInt(data.totalRequests) || parseInt(data.requests) || 0
   }
 
-  // 计算费用
-  let totalCost = 0
+  // 汇总费用：优先使用已存储的费用，仅对无存储费用的旧数据 fallback 到 token 重算
+  let totalRatedCost = 0
+  let totalRealCost = 0
   let inputTokens = 0
   let outputTokens = 0
   let cacheCreateTokens = 0
@@ -1292,16 +1349,30 @@ async function calculateKeyStats(keyId, timeRange, startDate, endDate) {
     cacheCreateTokens += stats.cacheCreateTokens
     cacheReadTokens += stats.cacheReadTokens
 
-    const costResult = CostCalculator.calculateCost(
-      {
+    if (stats.hasStoredCost) {
+      // 使用请求时已计算并存储的费用（精确，包含 1M 上下文、特殊计费等）
+      totalRatedCost += stats.ratedCostMicro / 1000000
+      totalRealCost += stats.realCostMicro / 1000000
+    } else {
+      // Legacy fallback：旧数据没有存储费用，从 token 重算（不精确但聊胜于无）
+      const costUsage = {
         input_tokens: stats.inputTokens,
         output_tokens: stats.outputTokens,
         cache_creation_input_tokens: stats.cacheCreateTokens,
         cache_read_input_tokens: stats.cacheReadTokens
-      },
-      model
-    )
-    totalCost += costResult.costs.total
+      }
+
+      if (stats.ephemeral5mTokens > 0 || stats.ephemeral1hTokens > 0) {
+        costUsage.cache_creation = {
+          ephemeral_5m_input_tokens: stats.ephemeral5mTokens,
+          ephemeral_1h_input_tokens: stats.ephemeral1hTokens
+        }
+      }
+
+      const costResult = CostCalculator.calculateCost(costUsage, model)
+      totalRatedCost += costResult.costs.total
+      totalRealCost += costResult.costs.total
+    }
   }
 
   const tokens = inputTokens + outputTokens + cacheCreateTokens + cacheReadTokens
@@ -1313,15 +1384,10 @@ async function calculateKeyStats(keyId, timeRange, startDate, endDate) {
     outputTokens,
     cacheCreateTokens,
     cacheReadTokens,
-    cost: totalCost,
-    formattedCost: CostCalculator.formatCost(totalCost),
-    // 实时限制数据
-    dailyCost,
-    currentWindowCost,
-    windowRemainingSeconds,
-    windowStartTime,
-    windowEndTime,
-    allTimeCost // 历史总费用（用于总费用限制）
+    cost: totalRatedCost,
+    realCost: totalRealCost,
+    formattedCost: CostCalculator.formatCost(totalRatedCost),
+    ...limitData
   }
 }
 
@@ -1450,7 +1516,9 @@ router.post('/api-keys', authenticateAdmin, async (req, res) => {
       activationUnit, // 新增：激活时间单位 (hours/days)
       expirationMode, // 新增：过期模式
       icon, // 新增：图标
-      serviceRates // API Key 级别服务倍率
+      serviceRates, // API Key 级别服务倍率
+      weeklyResetDay, // 周费用重置日 (1-7)
+      weeklyResetHour // 周费用重置时 (0-23)
     } = req.body
 
     // 输入验证
@@ -1583,6 +1651,22 @@ router.post('/api-keys', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: serviceRatesError })
     }
 
+    // 验证周费用重置配置
+    if (weeklyResetDay !== undefined && weeklyResetDay !== null && weeklyResetDay !== '') {
+      const day = Number(weeklyResetDay)
+      if (!Number.isInteger(day) || day < 1 || day > 7) {
+        return res
+          .status(400)
+          .json({ error: 'Weekly reset day must be an integer from 1 (Mon) to 7 (Sun)' })
+      }
+    }
+    if (weeklyResetHour !== undefined && weeklyResetHour !== null && weeklyResetHour !== '') {
+      const hour = Number(weeklyResetHour)
+      if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+        return res.status(400).json({ error: 'Weekly reset hour must be an integer from 0 to 23' })
+      }
+    }
+
     const newKey = await apiKeyService.generateApiKey({
       name,
       description,
@@ -1611,7 +1695,15 @@ router.post('/api-keys', authenticateAdmin, async (req, res) => {
       activationUnit,
       expirationMode,
       icon,
-      serviceRates
+      serviceRates,
+      weeklyResetDay:
+        weeklyResetDay !== undefined && weeklyResetDay !== null && weeklyResetDay !== ''
+          ? Number(weeklyResetDay)
+          : 1,
+      weeklyResetHour:
+        weeklyResetHour !== undefined && weeklyResetHour !== null && weeklyResetHour !== ''
+          ? Number(weeklyResetHour)
+          : 0
     })
 
     logger.success(`🔑 Admin created new API key: ${name}`)
@@ -1872,6 +1964,18 @@ router.put('/api-keys/batch', authenticateAdmin, async (req, res) => {
         if (updates.serviceRates !== undefined) {
           finalUpdates.serviceRates = updates.serviceRates
         }
+        if (updates.weeklyResetDay !== undefined) {
+          const day = Number(updates.weeklyResetDay)
+          if (Number.isInteger(day) && day >= 1 && day <= 7) {
+            finalUpdates.weeklyResetDay = day
+          }
+        }
+        if (updates.weeklyResetHour !== undefined) {
+          const hour = Number(updates.weeklyResetHour)
+          if (Number.isInteger(hour) && hour >= 0 && hour <= 23) {
+            finalUpdates.weeklyResetHour = hour
+          }
+        }
 
         // 处理账户绑定
         if (updates.claudeAccountId !== undefined) {
@@ -1927,6 +2031,22 @@ router.put('/api-keys/batch', authenticateAdmin, async (req, res) => {
 
         // 执行更新
         await apiKeyService.updateApiKey(keyId, finalUpdates)
+
+        // 重置配置变更后触发单 Key 回填
+        if (
+          finalUpdates.weeklyResetDay !== undefined ||
+          finalUpdates.weeklyResetHour !== undefined
+        ) {
+          setImmediate(async () => {
+            try {
+              const weeklyInitService = require('../../services/weeklyClaudeCostInitService')
+              await weeklyInitService.backfillSingleKey(keyId)
+            } catch (err) {
+              logger.error(`❌ 批量编辑回填单 Key 周费用失败 (${keyId})：`, err)
+            }
+          })
+        }
+
         results.successCount++
         logger.success(`Batch edit: API key ${keyId} updated successfully`)
       } catch (error) {
@@ -1990,7 +2110,9 @@ router.put('/api-keys/:keyId', authenticateAdmin, async (req, res) => {
       weeklyOpusCostLimit,
       tags,
       ownerId, // 新增：所有者ID字段
-      serviceRates // API Key 级别服务倍率
+      serviceRates, // API Key 级别服务倍率
+      weeklyResetDay, // 周费用重置日 (1-7)
+      weeklyResetHour // 周费用重置时 (0-23)
     } = req.body
 
     // 只允许更新指定字段
@@ -2185,6 +2307,27 @@ router.put('/api-keys/:keyId', authenticateAdmin, async (req, res) => {
       updates.serviceRates = serviceRates
     }
 
+    // 处理周费用重置配置
+    let resetConfigChanged = false
+    if (weeklyResetDay !== undefined && weeklyResetDay !== null && weeklyResetDay !== '') {
+      const day = Number(weeklyResetDay)
+      if (!Number.isInteger(day) || day < 1 || day > 7) {
+        return res
+          .status(400)
+          .json({ error: 'Weekly reset day must be an integer from 1 (Mon) to 7 (Sun)' })
+      }
+      updates.weeklyResetDay = day
+      resetConfigChanged = true
+    }
+    if (weeklyResetHour !== undefined && weeklyResetHour !== null && weeklyResetHour !== '') {
+      const hour = Number(weeklyResetHour)
+      if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+        return res.status(400).json({ error: 'Weekly reset hour must be an integer from 0 to 23' })
+      }
+      updates.weeklyResetHour = hour
+      resetConfigChanged = true
+    }
+
     // 处理活跃/禁用状态状态, 放在过期处理后，以确保后续增加禁用key功能
     if (isActive !== undefined) {
       if (typeof isActive !== 'boolean') {
@@ -2233,6 +2376,18 @@ router.put('/api-keys/:keyId', authenticateAdmin, async (req, res) => {
     }
 
     await apiKeyService.updateApiKey(keyId, updates)
+
+    // 重置配置变更后触发单 Key 回填
+    if (resetConfigChanged) {
+      setImmediate(async () => {
+        try {
+          const weeklyInitService = require('../../services/weeklyClaudeCostInitService')
+          await weeklyInitService.backfillSingleKey(keyId)
+        } catch (err) {
+          logger.error(`❌ 回填单 Key 周费用失败 (${keyId})：`, err)
+        }
+      })
+    }
 
     logger.success(`📝 Admin updated API key: ${keyId}`)
     return res.json({ success: true, message: 'API key updated successfully' })

@@ -1,10 +1,10 @@
 const express = require('express')
-const claudeRelayService = require('../services/claudeRelayService')
-const claudeConsoleRelayService = require('../services/claudeConsoleRelayService')
-const bedrockRelayService = require('../services/bedrockRelayService')
-const ccrRelayService = require('../services/ccrRelayService')
-const bedrockAccountService = require('../services/bedrockAccountService')
-const unifiedClaudeScheduler = require('../services/unifiedClaudeScheduler')
+const claudeRelayService = require('../services/relay/claudeRelayService')
+const claudeConsoleRelayService = require('../services/relay/claudeConsoleRelayService')
+const bedrockRelayService = require('../services/relay/bedrockRelayService')
+const ccrRelayService = require('../services/relay/ccrRelayService')
+const bedrockAccountService = require('../services/account/bedrockAccountService')
+const unifiedClaudeScheduler = require('../services/scheduler/unifiedClaudeScheduler')
 const apiKeyService = require('../services/apiKeyService')
 const { authenticateApiKey } = require('../middleware/auth')
 const logger = require('../utils/logger')
@@ -12,8 +12,8 @@ const { getEffectiveModel, parseVendorPrefixedModel } = require('../utils/modelH
 const sessionHelper = require('../utils/sessionHelper')
 const { updateRateLimitCounters } = require('../utils/rateLimitHelper')
 const claudeRelayConfigService = require('../services/claudeRelayConfigService')
-const claudeAccountService = require('../services/claudeAccountService')
-const claudeConsoleAccountService = require('../services/claudeConsoleAccountService')
+const claudeAccountService = require('../services/account/claudeAccountService')
+const claudeConsoleAccountService = require('../services/account/claudeConsoleAccountService')
 const {
   isWarmupRequest,
   buildMockWarmupResponse,
@@ -33,7 +33,8 @@ function queueRateLimitUpdate(
   model,
   context = '',
   keyId = null,
-  accountType = null
+  accountType = null,
+  preCalculatedCost = null
 ) {
   if (!rateLimitInfo) {
     return Promise.resolve({ totalTokens: 0, totalCost: 0 })
@@ -41,7 +42,14 @@ function queueRateLimitUpdate(
 
   const label = context ? ` (${context})` : ''
 
-  return updateRateLimitCounters(rateLimitInfo, usageSummary, model, keyId, accountType)
+  return updateRateLimitCounters(
+    rateLimitInfo,
+    usageSummary,
+    model,
+    keyId,
+    accountType,
+    preCalculatedCost
+  )
     .then(({ totalTokens, totalCost }) => {
       if (totalTokens > 0) {
         logger.api(`📊 Updated rate limit token count${label}: +${totalTokens} tokens`)
@@ -468,6 +476,19 @@ async function handleMessagesRequest(req, res) {
                 cache_creation_input_tokens: cacheCreateTokens,
                 cache_read_input_tokens: cacheReadTokens
               }
+              const requestBetaHeader =
+                _headers['anthropic-beta'] ||
+                _headers['Anthropic-Beta'] ||
+                _headers['ANTHROPIC-BETA']
+              if (requestBetaHeader) {
+                usageObject.request_anthropic_beta = requestBetaHeader
+              }
+              if (typeof _requestBody?.speed === 'string' && _requestBody.speed.trim()) {
+                usageObject.request_speed = _requestBody.speed.trim().toLowerCase()
+              }
+              if (typeof usageData.speed === 'string' && usageData.speed.trim()) {
+                usageObject.speed = usageData.speed.trim().toLowerCase()
+              }
 
               // 如果有详细的缓存创建数据，添加到 usage 对象中
               if (ephemeral5mTokens > 0 || ephemeral1hTokens > 0) {
@@ -479,23 +500,39 @@ async function handleMessagesRequest(req, res) {
 
               apiKeyService
                 .recordUsageWithDetails(_apiKeyId, usageObject, model, usageAccountId, accountType)
+                .then((costs) => {
+                  queueRateLimitUpdate(
+                    _rateLimitInfo,
+                    {
+                      inputTokens,
+                      outputTokens,
+                      cacheCreateTokens,
+                      cacheReadTokens
+                    },
+                    model,
+                    'claude-stream',
+                    _apiKeyId,
+                    accountType,
+                    costs
+                  )
+                })
                 .catch((error) => {
                   logger.error('❌ Failed to record stream usage:', error)
+                  // Fallback: 仍然更新限流计数（使用 legacy 计算）
+                  queueRateLimitUpdate(
+                    _rateLimitInfo,
+                    {
+                      inputTokens,
+                      outputTokens,
+                      cacheCreateTokens,
+                      cacheReadTokens
+                    },
+                    model,
+                    'claude-stream',
+                    _apiKeyId,
+                    accountType
+                  )
                 })
-
-              queueRateLimitUpdate(
-                _rateLimitInfo,
-                {
-                  inputTokens,
-                  outputTokens,
-                  cacheCreateTokens,
-                  cacheReadTokens
-                },
-                model,
-                'claude-stream',
-                _apiKeyId,
-                accountType
-              )
 
               usageDataCaptured = true
               logger.api(
@@ -562,6 +599,22 @@ async function handleMessagesRequest(req, res) {
                 cache_creation_input_tokens: cacheCreateTokens,
                 cache_read_input_tokens: cacheReadTokens
               }
+              const requestBetaHeader =
+                _headersConsole['anthropic-beta'] ||
+                _headersConsole['Anthropic-Beta'] ||
+                _headersConsole['ANTHROPIC-BETA']
+              if (requestBetaHeader) {
+                usageObject.request_anthropic_beta = requestBetaHeader
+              }
+              if (
+                typeof _requestBodyConsole?.speed === 'string' &&
+                _requestBodyConsole.speed.trim()
+              ) {
+                usageObject.request_speed = _requestBodyConsole.speed.trim().toLowerCase()
+              }
+              if (typeof usageData.speed === 'string' && usageData.speed.trim()) {
+                usageObject.speed = usageData.speed.trim().toLowerCase()
+              }
 
               // 如果有详细的缓存创建数据，添加到 usage 对象中
               if (ephemeral5mTokens > 0 || ephemeral1hTokens > 0) {
@@ -579,23 +632,38 @@ async function handleMessagesRequest(req, res) {
                   usageAccountId,
                   'claude-console'
                 )
+                .then((costs) => {
+                  queueRateLimitUpdate(
+                    _rateLimitInfoConsole,
+                    {
+                      inputTokens,
+                      outputTokens,
+                      cacheCreateTokens,
+                      cacheReadTokens
+                    },
+                    model,
+                    'claude-console-stream',
+                    _apiKeyIdConsole,
+                    accountType,
+                    costs
+                  )
+                })
                 .catch((error) => {
                   logger.error('❌ Failed to record stream usage:', error)
+                  queueRateLimitUpdate(
+                    _rateLimitInfoConsole,
+                    {
+                      inputTokens,
+                      outputTokens,
+                      cacheCreateTokens,
+                      cacheReadTokens
+                    },
+                    model,
+                    'claude-console-stream',
+                    _apiKeyIdConsole,
+                    accountType
+                  )
                 })
-
-              queueRateLimitUpdate(
-                _rateLimitInfoConsole,
-                {
-                  inputTokens,
-                  outputTokens,
-                  cacheCreateTokens,
-                  cacheReadTokens
-                },
-                model,
-                'claude-console-stream',
-                _apiKeyIdConsole,
-                accountType
-              )
 
               usageDataCaptured = true
               logger.api(
@@ -645,23 +713,38 @@ async function handleMessagesRequest(req, res) {
                 accountId,
                 'bedrock'
               )
+              .then((costs) => {
+                queueRateLimitUpdate(
+                  _rateLimitInfoBedrock,
+                  {
+                    inputTokens,
+                    outputTokens,
+                    cacheCreateTokens: 0,
+                    cacheReadTokens: 0
+                  },
+                  result.model,
+                  'bedrock-stream',
+                  _apiKeyIdBedrock,
+                  'bedrock',
+                  costs
+                )
+              })
               .catch((error) => {
                 logger.error('❌ Failed to record Bedrock stream usage:', error)
+                queueRateLimitUpdate(
+                  _rateLimitInfoBedrock,
+                  {
+                    inputTokens,
+                    outputTokens,
+                    cacheCreateTokens: 0,
+                    cacheReadTokens: 0
+                  },
+                  result.model,
+                  'bedrock-stream',
+                  _apiKeyIdBedrock,
+                  'bedrock'
+                )
               })
-
-            queueRateLimitUpdate(
-              _rateLimitInfoBedrock,
-              {
-                inputTokens,
-                outputTokens,
-                cacheCreateTokens: 0,
-                cacheReadTokens: 0
-              },
-              result.model,
-              'bedrock-stream',
-              _apiKeyIdBedrock,
-              'bedrock'
-            )
 
             usageDataCaptured = true
             logger.api(
@@ -728,6 +811,19 @@ async function handleMessagesRequest(req, res) {
                 cache_creation_input_tokens: cacheCreateTokens,
                 cache_read_input_tokens: cacheReadTokens
               }
+              const requestBetaHeader =
+                _headersCcr['anthropic-beta'] ||
+                _headersCcr['Anthropic-Beta'] ||
+                _headersCcr['ANTHROPIC-BETA']
+              if (requestBetaHeader) {
+                usageObject.request_anthropic_beta = requestBetaHeader
+              }
+              if (typeof _requestBodyCcr?.speed === 'string' && _requestBodyCcr.speed.trim()) {
+                usageObject.request_speed = _requestBodyCcr.speed.trim().toLowerCase()
+              }
+              if (typeof usageData.speed === 'string' && usageData.speed.trim()) {
+                usageObject.speed = usageData.speed.trim().toLowerCase()
+              }
 
               // 如果有详细的缓存创建数据，添加到 usage 对象中
               if (ephemeral5mTokens > 0 || ephemeral1hTokens > 0) {
@@ -739,23 +835,38 @@ async function handleMessagesRequest(req, res) {
 
               apiKeyService
                 .recordUsageWithDetails(_apiKeyIdCcr, usageObject, model, usageAccountId, 'ccr')
+                .then((costs) => {
+                  queueRateLimitUpdate(
+                    _rateLimitInfoCcr,
+                    {
+                      inputTokens,
+                      outputTokens,
+                      cacheCreateTokens,
+                      cacheReadTokens
+                    },
+                    model,
+                    'ccr-stream',
+                    _apiKeyIdCcr,
+                    'ccr',
+                    costs
+                  )
+                })
                 .catch((error) => {
                   logger.error('❌ Failed to record CCR stream usage:', error)
+                  queueRateLimitUpdate(
+                    _rateLimitInfoCcr,
+                    {
+                      inputTokens,
+                      outputTokens,
+                      cacheCreateTokens,
+                      cacheReadTokens
+                    },
+                    model,
+                    'ccr-stream',
+                    _apiKeyIdCcr,
+                    'ccr'
+                  )
                 })
-
-              queueRateLimitUpdate(
-                _rateLimitInfoCcr,
-                {
-                  inputTokens,
-                  outputTokens,
-                  cacheCreateTokens,
-                  cacheReadTokens
-                },
-                model,
-                'ccr-stream',
-                _apiKeyIdCcr,
-                'ccr'
-              )
 
               usageDataCaptured = true
               logger.api(
@@ -1101,7 +1212,7 @@ async function handleMessagesRequest(req, res) {
 
           // 记录真实的token使用量（包含模型信息和所有4种token以及账户ID）
           const { accountId: responseAccountId } = response
-          await apiKeyService.recordUsage(
+          const nonStreamCosts = await apiKeyService.recordUsage(
             _apiKeyIdNonStream,
             inputTokens,
             outputTokens,
@@ -1123,7 +1234,8 @@ async function handleMessagesRequest(req, res) {
             model,
             'claude-non-stream',
             _apiKeyIdNonStream,
-            accountType
+            accountType,
+            nonStreamCosts
           )
 
           usageRecorded = true
@@ -1289,8 +1401,8 @@ router.get('/v1/models', authenticateApiKey, async (req, res) => {
         })
       }
 
-      const unifiedGeminiScheduler = require('../services/unifiedGeminiScheduler')
-      const geminiAccountService = require('../services/geminiAccountService')
+      const unifiedGeminiScheduler = require('../services/scheduler/unifiedGeminiScheduler')
+      const geminiAccountService = require('../services/account/geminiAccountService')
 
       let accountSelection
       try {

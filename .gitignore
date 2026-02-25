@@ -250,3 +250,5 @@ web/admin-spa/dist/
 
 # Systemd service files
 *.service
+
+.serena/

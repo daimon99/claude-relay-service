@@ -4,9 +4,10 @@ const {
   InvokeModelWithResponseStreamCommand
 } = require('@aws-sdk/client-bedrock-runtime')
 const { fromEnv } = require('@aws-sdk/credential-providers')
-const logger = require('../utils/logger')
-const config = require('../../config/config')
-const userMessageQueueService = require('./userMessageQueueService')
+const logger = require('../../utils/logger')
+const config = require('../../../config/config')
+const userMessageQueueService = require('../userMessageQueueService')
+const upstreamErrorHelper = require('../../utils/upstreamErrorHelper')
 
 class BedrockRelayService {
   constructor() {
@@ -188,7 +189,7 @@ class BedrockRelayService {
       }
     } catch (error) {
       logger.error('❌ Bedrock非流式请求失败:', error)
-      throw this._handleBedrockError(error)
+      throw this._handleBedrockError(error, accountId, bedrockAccount)
     } finally {
       // 📬 释放用户消息队列锁（兜底，正常情况下已在请求发送后提前释放）
       if (queueLockAcquired && queueRequestId && accountId) {
@@ -376,10 +377,12 @@ class BedrockRelayService {
       }
 
       res.write('event: error\n')
-      res.write(`data: ${JSON.stringify({ error: this._handleBedrockError(error).message })}\n\n`)
+      res.write(
+        `data: ${JSON.stringify({ error: this._handleBedrockError(error, accountId, bedrockAccount).message })}\n\n`
+      )
       res.end()
 
-      throw this._handleBedrockError(error)
+      throw this._handleBedrockError(error, accountId, bedrockAccount)
     } finally {
       // 📬 释放用户消息队列锁（兜底，正常情况下已在请求发送后提前释放）
       if (queueLockAcquired && queueRequestId && accountId) {
@@ -433,8 +436,15 @@ class BedrockRelayService {
 
   // 将标准Claude模型名映射为Bedrock格式
   _mapToBedrockModel(modelName) {
+    // Strip [1m] suffix (long context variant) — Bedrock uses the same model ID
+    // but supports 1M context natively for models that have it
+    const cleanModelName = modelName.replace(/\[1m\]$/, '')
+
     // 标准Claude模型名到Bedrock模型名的映射表
     const modelMapping = {
+      // Claude Opus 4.6
+      'claude-opus-4-6': 'global.anthropic.claude-opus-4-6-v1',
+
       // Claude 4.5 Opus
       'claude-opus-4-5': 'us.anthropic.claude-opus-4-5-20251101-v1:0',
       'claude-opus-4-5-20251101': 'us.anthropic.claude-opus-4-5-20251101-v1:0',
@@ -479,21 +489,21 @@ class BedrockRelayService {
 
     // 如果已经是Bedrock格式，直接返回
     // Bedrock模型格式：{region}.anthropic.{model-name} 或 anthropic.{model-name}
-    if (modelName.includes('.anthropic.') || modelName.startsWith('anthropic.')) {
-      return modelName
+    if (cleanModelName.includes('.anthropic.') || cleanModelName.startsWith('anthropic.')) {
+      return cleanModelName
     }
 
     // 查找映射
-    const mappedModel = modelMapping[modelName]
+    const mappedModel = modelMapping[cleanModelName]
     if (mappedModel) {
       return mappedModel
     }
 
     // 如果没有找到映射，返回原始模型名（可能会导致错误，但保持向后兼容）
-    logger.warn(`⚠️ 未找到模型映射: ${modelName}，使用原始模型名`, {
+    logger.warn(`⚠️ 未找到模型映射: ${cleanModelName}，使用原始模型名`, {
       metadata: { originalModel: modelName }
     })
-    return modelName
+    return cleanModelName
   }
 
   // 选择使用的区域
@@ -509,6 +519,35 @@ class BedrockRelayService {
     }
 
     return this.defaultRegion
+  }
+
+  // Sanitize cache_control fields for Bedrock compatibility.
+  // Bedrock only supports { type: "ephemeral" } — extra fields like "scope"
+  // (added in Claude Code v2.1.38+) cause ValidationException.
+  _sanitizeCacheControl(obj) {
+    if (obj === null || obj === undefined || typeof obj !== 'object') {
+      return obj
+    }
+
+    if (Array.isArray(obj)) {
+      obj.forEach((item) => this._sanitizeCacheControl(item))
+      return obj
+    }
+
+    if (obj.cache_control && typeof obj.cache_control === 'object') {
+      // Keep only the "type" field that Bedrock accepts
+      obj.cache_control = { type: obj.cache_control.type || 'ephemeral' }
+    }
+
+    // Recurse into known nested structures (messages[].content, tool input_schema, etc.)
+    for (const key of Object.keys(obj)) {
+      const val = obj[key]
+      if (val && typeof val === 'object') {
+        this._sanitizeCacheControl(val)
+      }
+    }
+
+    return obj
   }
 
   // 转换Claude格式请求到Bedrock格式
@@ -549,6 +588,9 @@ class BedrockRelayService {
     if (requestBody.tool_choice) {
       bedrockPayload.tool_choice = requestBody.tool_choice
     }
+
+    // Sanitize cache_control for Bedrock compatibility (strip unsupported fields like "scope")
+    this._sanitizeCacheControl(bedrockPayload)
 
     return bedrockPayload
   }
@@ -647,7 +689,25 @@ class BedrockRelayService {
   }
 
   // 处理Bedrock错误
-  _handleBedrockError(error) {
+  _handleBedrockError(error, accountId = null, bedrockAccount = null) {
+    const autoProtectionDisabled =
+      bedrockAccount?.disableAutoProtection === true ||
+      bedrockAccount?.disableAutoProtection === 'true'
+    if (accountId && !autoProtectionDisabled) {
+      if (error.name === 'ThrottlingException') {
+        upstreamErrorHelper.markTempUnavailable(accountId, 'bedrock', 429).catch(() => {})
+      } else if (error.name === 'AccessDeniedException') {
+        upstreamErrorHelper.markTempUnavailable(accountId, 'bedrock', 403).catch(() => {})
+      } else if (
+        error.name === 'ServiceUnavailableException' ||
+        error.name === 'InternalServerException'
+      ) {
+        upstreamErrorHelper.markTempUnavailable(accountId, 'bedrock', 500).catch(() => {})
+      } else if (error.name === 'ModelNotReadyException') {
+        upstreamErrorHelper.markTempUnavailable(accountId, 'bedrock', 503).catch(() => {})
+      }
+    }
+
     const errorMessage = error.message || 'Unknown Bedrock error'
 
     if (error.name === 'ValidationException') {

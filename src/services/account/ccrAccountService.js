@@ -1,8 +1,9 @@
 const { v4: uuidv4 } = require('uuid')
-const ProxyHelper = require('../utils/proxyHelper')
-const redis = require('../models/redis')
-const logger = require('../utils/logger')
-const { createEncryptor } = require('../utils/commonHelper')
+const ProxyHelper = require('../../utils/proxyHelper')
+const redis = require('../../models/redis')
+const logger = require('../../utils/logger')
+const { createEncryptor } = require('../../utils/commonHelper')
+const upstreamErrorHelper = require('../../utils/upstreamErrorHelper')
 
 class CcrAccountService {
   constructor() {
@@ -39,7 +40,8 @@ class CcrAccountService {
       accountType = 'shared', // 'dedicated' or 'shared'
       schedulable = true, // 是否可被调度
       dailyQuota = 0, // 每日额度限制（美元），0表示不限制
-      quotaResetTime = '00:00' // 额度重置时间（HH:mm格式）
+      quotaResetTime = '00:00', // 额度重置时间（HH:mm格式）
+      disableAutoProtection = false // 是否关闭自动防护（429/401/400/529 不自动禁用）
     } = options
 
     // 验证必填字段
@@ -86,7 +88,8 @@ class CcrAccountService {
       // 使用与统计一致的时区日期，避免边界问题
       lastResetDate: redis.getDateStringInTimezone(), // 最后重置日期（按配置时区）
       quotaResetTime, // 额度重置时间
-      quotaStoppedAt: '' // 因额度停用的时间
+      quotaStoppedAt: '', // 因额度停用的时间
+      disableAutoProtection: disableAutoProtection.toString() // 关闭自动防护
     }
 
     const client = redis.getClientSafe()
@@ -181,7 +184,8 @@ class CcrAccountService {
             autoDisabledReason: accountData.autoDisabledReason || null,
             autoDisabledDetails: accountData.autoDisabledDetails || null,
             lastAutoRecoveryAttempt: accountData.lastAutoRecoveryAttempt || null,
-            autoRecoveredAt: accountData.autoRecoveredAt || null
+            autoRecoveredAt: accountData.autoRecoveredAt || null,
+            disableAutoProtection: accountData.disableAutoProtection === 'true'
           })
         }
       }
@@ -227,6 +231,7 @@ class CcrAccountService {
     }
     accountData.isActive = accountData.isActive === 'true'
     accountData.schedulable = accountData.schedulable !== 'false' // 默认为true
+    accountData.disableAutoProtection = accountData.disableAutoProtection === 'true'
 
     if (accountData.proxy) {
       accountData.proxy = JSON.parse(accountData.proxy)
@@ -341,6 +346,11 @@ class CcrAccountService {
       }
       if (updates.autoRecoveredAt !== undefined) {
         updatedData.autoRecoveredAt = updates.autoRecoveredAt
+      }
+
+      // 自动防护开关
+      if (updates.disableAutoProtection !== undefined) {
+        updatedData.disableAutoProtection = updates.disableAutoProtection.toString()
       }
 
       await client.hset(`${this.ACCOUNT_KEY_PREFIX}${accountId}`, updatedData)
@@ -735,7 +745,7 @@ class CcrAccountService {
 
         // 发送 Webhook 通知
         try {
-          const webhookNotifier = require('../utils/webhookNotifier')
+          const webhookNotifier = require('../../utils/webhookNotifier')
           await webhookNotifier.sendAccountAnomalyNotification({
             accountId,
             accountName: account.name || accountId,
@@ -902,9 +912,12 @@ class CcrAccountService {
 
       logger.success(`Reset all error status for CCR account ${accountId}`)
 
+      // 清除临时不可用状态
+      await upstreamErrorHelper.clearTempUnavailable(accountId, 'ccr').catch(() => {})
+
       // 异步发送 Webhook 通知（忽略错误）
       try {
-        const webhookNotifier = require('../utils/webhookNotifier')
+        const webhookNotifier = require('../../utils/webhookNotifier')
         await webhookNotifier.sendAccountAnomalyNotification({
           accountId,
           accountName: accountData.name || accountId,

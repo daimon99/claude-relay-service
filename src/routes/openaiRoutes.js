@@ -4,10 +4,10 @@ const router = express.Router()
 const logger = require('../utils/logger')
 const config = require('../../config/config')
 const { authenticateApiKey } = require('../middleware/auth')
-const unifiedOpenAIScheduler = require('../services/unifiedOpenAIScheduler')
-const openaiAccountService = require('../services/openaiAccountService')
-const openaiResponsesAccountService = require('../services/openaiResponsesAccountService')
-const openaiResponsesRelayService = require('../services/openaiResponsesRelayService')
+const unifiedOpenAIScheduler = require('../services/scheduler/unifiedOpenAIScheduler')
+const openaiAccountService = require('../services/account/openaiAccountService')
+const openaiResponsesAccountService = require('../services/account/openaiResponsesAccountService')
+const openaiResponsesRelayService = require('../services/relay/openaiResponsesRelayService')
 const apiKeyService = require('../services/apiKeyService')
 const redis = require('../models/redis')
 const crypto = require('crypto')
@@ -70,7 +70,14 @@ function extractCodexUsageHeaders(headers) {
   return hasData ? snapshot : null
 }
 
-async function applyRateLimitTracking(req, usageSummary, model, context = '', accountType = null) {
+async function applyRateLimitTracking(
+  req,
+  usageSummary,
+  model,
+  context = '',
+  accountType = null,
+  preCalculatedCost = null
+) {
   if (!req.rateLimitInfo) {
     return
   }
@@ -83,7 +90,8 @@ async function applyRateLimitTracking(req, usageSummary, model, context = '', ac
       usageSummary,
       model,
       req.apiKey?.id,
-      accountType
+      accountType,
+      preCalculatedCost
     )
 
     if (totalTokens > 0) {
@@ -240,11 +248,13 @@ const handleResponses = async (req, res) => {
     }
 
     // 从请求头或请求体中提取会话 ID
+    // NOTE: For some clients, prompt_cache_key is the only stable per-session key.
     const sessionId =
       req.headers['session_id'] ||
       req.headers['x-session-id'] ||
       req.body?.session_id ||
       req.body?.conversation_id ||
+      req.body?.prompt_cache_key ||
       null
 
     sessionHash = sessionId ? crypto.createHash('sha256').update(sessionId).digest('hex') : null
@@ -611,7 +621,7 @@ const handleResponses = async (req, res) => {
           // 计算实际输入token（总输入减去缓存部分）
           const actualInputTokens = Math.max(0, totalInputTokens - cacheReadTokens)
 
-          await apiKeyService.recordUsage(
+          const nonStreamCosts = await apiKeyService.recordUsage(
             apiKeyData.id,
             actualInputTokens, // 传递实际输入（不含缓存）
             outputTokens,
@@ -636,7 +646,8 @@ const handleResponses = async (req, res) => {
             },
             actualModel,
             'openai-non-stream',
-            'openai'
+            'openai',
+            nonStreamCosts
           )
         }
 
@@ -727,7 +738,7 @@ const handleResponses = async (req, res) => {
           // 使用响应中的真实 model，如果没有则使用请求中的 model，最后回退到默认值
           const modelToRecord = actualModel || requestedModel || 'gpt-4'
 
-          await apiKeyService.recordUsage(
+          const streamCosts = await apiKeyService.recordUsage(
             apiKeyData.id,
             actualInputTokens, // 传递实际输入（不含缓存）
             outputTokens,
@@ -753,7 +764,8 @@ const handleResponses = async (req, res) => {
             },
             modelToRecord,
             'openai-stream',
-            'openai'
+            'openai',
+            streamCosts
           )
         } catch (error) {
           logger.error('Failed to record OpenAI usage:', error)
