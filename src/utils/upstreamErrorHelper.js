@@ -110,58 +110,14 @@ const parseRetryAfter = (headers) => {
   return null
 }
 
-// 标记账户为临时不可用
+// 标记账户为临时不可用（已禁用：改为手动管理渠道可用性）
 const markTempUnavailable = async (accountId, accountType, statusCode, customTtl = null) => {
-  try {
-    const errorType = classifyError(statusCode)
-    if (!errorType) {
-      return { success: false, reason: 'not_a_pausable_error' }
-    }
-
-    const ttlConfig = getTtlConfig()
-    const ttlSeconds = customTtl ?? ttlConfig[errorType]
-
-    const redis = getRedis()
-    const client = redis.getClientSafe()
-    const key = `${TEMP_UNAVAILABLE_PREFIX}:${accountType}:${accountId}`
-    await client.setex(
-      key,
-      ttlSeconds,
-      JSON.stringify({
-        statusCode,
-        errorType,
-        markedAt: new Date().toISOString()
-      })
-    )
-
-    logger.warn(
-      `⏱️ [UpstreamError] Account ${accountId} (${accountType}) marked temporarily unavailable for ${ttlSeconds}s (${statusCode} ${errorType})`
-    )
-
-    return { success: true, ttlSeconds, errorType }
-  } catch (error) {
-    logger.error(
-      `❌ [UpstreamError] Failed to mark account ${accountId} temporarily unavailable:`,
-      error
-    )
-    return { success: false }
-  }
+  return { success: false, reason: 'auto_temp_unavailable_disabled' }
 }
 
-// 检查账户是否临时不可用
+// 检查账户是否临时不可用（已禁用：始终返回 false）
 const isTempUnavailable = async (accountId, accountType) => {
-  try {
-    const redis = getRedis()
-    const client = redis.getClientSafe()
-    const key = `${TEMP_UNAVAILABLE_PREFIX}:${accountType}:${accountId}`
-    return (await client.exists(key)) === 1
-  } catch (error) {
-    logger.error(
-      `❌ [UpstreamError] Failed to check temp unavailable status for ${accountId}:`,
-      error
-    )
-    return false
-  }
+  return false
 }
 
 // 清除临时不可用状态
@@ -176,57 +132,9 @@ const clearTempUnavailable = async (accountId, accountType) => {
   }
 }
 
-// 批量查询所有临时不可用状态（用于前端展示）
+// 批量查询所有临时不可用状态（已禁用：始终返回空）
 const getAllTempUnavailable = async () => {
-  try {
-    const redis = getRedis()
-    const client = redis.getClientSafe()
-    const pattern = `${TEMP_UNAVAILABLE_PREFIX}:*`
-    const keys = await client.keys(pattern)
-    if (!keys.length) {
-      return {}
-    }
-
-    const pipeline = client.pipeline()
-    for (const key of keys) {
-      pipeline.get(key)
-      pipeline.ttl(key)
-    }
-    const results = await pipeline.exec()
-
-    const statuses = {}
-    for (let i = 0; i < keys.length; i++) {
-      const key = keys[i]
-      // key format: temp_unavailable:{accountType}:{accountId}
-      const parts = key.split(':')
-      const accountType = parts[1]
-      const accountId = parts.slice(2).join(':')
-      const [getErr, value] = results[i * 2]
-      const [ttlErr, ttl] = results[i * 2 + 1]
-      if (getErr || ttlErr || !value) {
-        continue
-      }
-
-      try {
-        const data = JSON.parse(value)
-        const compositeKey = `${accountType}:${accountId}`
-        statuses[compositeKey] = {
-          accountId,
-          accountType,
-          statusCode: data.statusCode,
-          errorType: data.errorType,
-          markedAt: data.markedAt,
-          ttl: ttl > 0 ? ttl : 0
-        }
-      } catch {
-        // ignore parse errors
-      }
-    }
-    return statuses
-  } catch (error) {
-    logger.error('❌ [UpstreamError] Failed to get all temp unavailable statuses:', error)
-    return {}
-  }
+  return {}
 }
 
 // 清洗上游错误数据，去除内部路由标识（如 [codex/codex]）

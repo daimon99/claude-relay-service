@@ -24,39 +24,10 @@ class AutoRecoveryService {
   /**
    * 启动自动恢复定时任务
    */
+  // 已禁用：自动禁用机制已关闭，不再需要自动恢复
   start() {
-    if (this.isRunning) {
-      logger.warn('⚠️ [Auto Recovery] Service is already running')
-      return
-    }
-
-    if (config.autoRecovery?.enabled === false) {
-      logger.info('⚠️ [Auto Recovery] Service is disabled in config')
-      return
-    }
-
-    logger.info(
-      `🔄 [Auto Recovery] Starting service, interval: ${this.testInterval / 1000 / 60} minutes`
-    )
-    this.isRunning = true
-
-    // 启动时先清理一次数据不一致的账户
-    this.cleanupInconsistentData()
-      .then(() => {
-        logger.info('✅ [Auto Recovery] Initial data cleanup completed')
-        // 立即执行一次完整的恢复检查
-        return this.runRecoveryCheck()
-      })
-      .catch((err) => {
-        logger.error('❌ [Auto Recovery] Initial cleanup/check failed:', err)
-      })
-
-    // 设置定时任务
-    this.intervalHandle = setInterval(() => {
-      this.runRecoveryCheck().catch((err) => {
-        logger.error('❌ [Auto Recovery] Scheduled check failed:', err)
-      })
-    }, this.testInterval)
+    logger.info('ℹ️ [Auto Recovery] Service is disabled (auto-disable feature removed)')
+    return
   }
 
   /**
@@ -354,7 +325,10 @@ class AutoRecoveryService {
   async recoverAccountFromTest(accountId, accountType) {
     try {
       // 检查账户是否在自动禁用索引中
-      const isAutoDisabled = await redis.sIsMember(`auto_disabled_accounts:${accountType}`, accountId)
+      const isAutoDisabled = await redis.sIsMember(
+        `auto_disabled_accounts:${accountType}`,
+        accountId
+      )
 
       if (!isAutoDisabled) {
         logger.debug(

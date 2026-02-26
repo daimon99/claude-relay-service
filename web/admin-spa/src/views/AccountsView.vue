@@ -592,38 +592,11 @@
                       >
                     </span>
                     <span
-                      v-if="account.tempUnavailable"
-                      class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                    >
-                      <i class="fas fa-clock mr-1" />
-                      临时暂停
-                      <span v-if="account.tempUnavailable.ttl > 0"
-                        >({{ formatTempUnavailableTime(account.tempUnavailable.ttl) }})</span
-                      >
-                      <el-tooltip
-                        :content="`${account.tempUnavailable.errorType} (HTTP ${account.tempUnavailable.statusCode})`"
-                        effect="dark"
-                        placement="top"
-                      >
-                        <i class="fas fa-info-circle ml-1 cursor-help" />
-                      </el-tooltip>
-                    </span>
-                    <span
                       v-if="account.schedulable === false"
-                      :class="[
-                        'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold',
-                        account.autoDisabledAt
-                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
-                          : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                      ]"
+                      class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-300"
                     >
-                      <i
-                        :class="[
-                          'mr-1',
-                          account.autoDisabledAt ? 'fas fa-robot' : 'fas fa-pause-circle'
-                        ]"
-                      />
-                      {{ account.autoDisabledAt ? '自动禁用' : '不可调度' }}
+                      <i class="fas fa-pause-circle mr-1" />
+                      不可调度
                       <el-tooltip
                         v-if="getSchedulableReason(account)"
                         :content="getSchedulableReason(account)"
@@ -2425,7 +2398,6 @@ const showResetButton = (account) => {
       account.status !== 'active' ||
       account.rateLimitStatus?.isRateLimited ||
       account.rateLimitStatus === 'limited' ||
-      account.tempUnavailable ||
       !account.isActive)
   )
 }
@@ -3346,39 +3318,6 @@ const loadAccounts = async (forceReload = false) => {
       }
     })
 
-    // 获取临时不可用状态并附加到账户数据
-    try {
-      const tempRes = await httpApis.getTempUnavailableApi()
-      if (tempRes?.success && tempRes.data) {
-        const tempStatuses = tempRes.data
-        filteredAccounts = filteredAccounts.map((account) => {
-          // 尝试匹配 accountType:accountId
-          const platformTypeMap = {
-            claude: 'claude-official',
-            'claude-console': 'claude-console',
-            bedrock: 'bedrock',
-            gemini: 'gemini',
-            'gemini-api': 'gemini-api',
-            openai: 'openai',
-            'openai-responses': 'openai-responses',
-            ccr: 'ccr',
-            droid: 'droid',
-            azure_openai: 'azure-openai',
-            'azure-openai': 'azure-openai'
-          }
-          const accountType = platformTypeMap[account.platform] || account.platform
-          const key = `${accountType}:${account.id}`
-          const tempStatus = tempStatuses[key]
-          if (tempStatus) {
-            return { ...account, tempUnavailable: tempStatus }
-          }
-          return account
-        })
-      }
-    } catch {
-      // 忽略错误，不影响账户列表显示
-    }
-
     accounts.value = filteredAccounts
     cleanupSelectedAccounts()
 
@@ -3671,15 +3610,6 @@ const formatRateLimitTime = (minutes) => {
 }
 
 // 格式化临时暂停剩余时间（秒 → 可读格式）
-const formatTempUnavailableTime = (seconds) => {
-  if (!seconds || seconds <= 0) return ''
-  seconds = Math.floor(seconds)
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  if (mins > 0) return `${mins}m${secs > 0 ? secs + 's' : ''}`
-  return `${secs}s`
-}
-
 // 检查账户是否被限流
 const isAccountRateLimited = (account) => {
   if (!account) return false
@@ -4215,47 +4145,6 @@ const getClaudeAccountType = (account) => {
 // 获取停止调度的原因
 const getSchedulableReason = (account) => {
   if (account.schedulable !== false) return null
-
-  // 检查是否为自动禁用
-  if (account.autoDisabledAt) {
-    const disabledTime = new Date(account.autoDisabledAt).toLocaleString('zh-CN')
-    const reason = account.autoDisabledReason || '未知错误'
-
-    // 解析详细信息
-    let details = ''
-    if (account.autoDisabledDetails) {
-      try {
-        const detailObj = JSON.parse(account.autoDisabledDetails)
-        const triggerType = detailObj.triggerType === 'test' ? '测试连接' : 'API请求'
-        details = `\n触发方式: ${triggerType}`
-        if (detailObj.apiUrl && detailObj.apiUrl !== 'Unknown URL') {
-          details += `\nAPI地址: ${detailObj.apiUrl}`
-        }
-      } catch (e) {
-        // 解析失败，忽略
-      }
-    }
-
-    // 计算下次检测时间
-    let nextCheckInfo = ''
-    if (account.lastAutoRecoveryAttempt) {
-      const lastAttempt = new Date(account.lastAutoRecoveryAttempt)
-      const intervalMinutes = systemConfig.value?.autoRecovery?.intervalMinutes || 60 // 从API配置读取，默认60分钟
-      const nextCheck = new Date(lastAttempt.getTime() + intervalMinutes * 60 * 1000)
-      const now = new Date()
-
-      if (nextCheck > now) {
-        const minutesLeft = Math.ceil((nextCheck - now) / 60000)
-        nextCheckInfo = `\n下次检测: 约 ${minutesLeft} 分钟后`
-      } else {
-        nextCheckInfo = '\n下次检测: 即将进行'
-      }
-    } else {
-      nextCheckInfo = '\n下次检测: 等待中（首次检测）'
-    }
-
-    return `🤖 自动禁用\n禁用时间: ${disabledTime}\n禁用原因: ${reason}${details}${nextCheckInfo}`
-  }
 
   // Claude Console 账户的错误状态
   if (account.platform === 'claude-console') {

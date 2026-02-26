@@ -21,87 +21,9 @@ class AccountAutoDisableService {
    * @param {string} triggerType - 触���类型："request" 或 "test"
    * @returns {Promise<Object>} { disabled: boolean, reason: string }
    */
+  // 已禁用：渠道可用性改为手动管理，不再自动禁用
   async handleErrorResponse(accountId, accountType, statusCode, errorMessage, apiUrl, triggerType) {
-    // 只处理 4xx 和 5xx 错误
-    if (statusCode < 400 || statusCode >= 600) {
-      return { disabled: false }
-    }
-
-    // 🔥 用户手动测试时：强制禁用，不检查白名单
-    // 因为这是用户主动确认的测试结果，应该严格处理
-    const forceDisable = triggerType === 'test'
-
-    // 检查是否应该跳过自动禁用（白名单）
-    // 但如果是用户手动测试，则忽略白名单
-    if (!forceDisable) {
-      const skipCheck = this._shouldSkipAutoDisable(errorMessage, statusCode, apiUrl)
-      if (skipCheck.shouldSkip) {
-        logger.info(
-          `ℹ️ [Auto Disable] Skipping auto-disable for account ${accountId} (${accountType}) - ${skipCheck.reason}`,
-          {
-            accountId,
-            accountType,
-            statusCode,
-            errorMessage: errorMessage.substring(0, 200),
-            apiUrl,
-            triggerType,
-            skipReason: skipCheck.reason
-          }
-        )
-        return { disabled: false, skipped: true, reason: skipCheck.reason }
-      }
-    } else {
-      logger.info(
-        `🔥 [Auto Disable] Force disable (user test) for account ${accountId} (${accountType}) - bypassing whitelist`,
-        {
-          accountId,
-          accountType,
-          statusCode,
-          errorMessage: errorMessage.substring(0, 200),
-          apiUrl,
-          triggerType
-        }
-      )
-    }
-
-    logger.warn(
-      `🚫 [Auto Disable] ${triggerType} - Account ${accountId} (${accountType}) encountered ${statusCode}, disabling`,
-      {
-        accountId,
-        accountType,
-        statusCode,
-        errorMessage: errorMessage.substring(0, 200),
-        apiUrl,
-        triggerType
-      }
-    )
-
-    // 准备更新数据
-    const updates = {
-      schedulable: false,
-      autoDisabledAt: new Date().toISOString(),
-      autoDisabledReason: `HTTP ${statusCode}: ${errorMessage.substring(0, 200)}`,
-      autoDisabledDetails: JSON.stringify({
-        statusCode,
-        errorMessage,
-        apiUrl,
-        triggerType,
-        disabledAt: new Date().toISOString()
-      })
-    }
-
-    try {
-      // 根据账户类型更新账户数据
-      await this._updateAccountByType(accountId, accountType, updates)
-
-      // 添加到自动禁用索引
-      await redis.sadd(`auto_disabled_accounts:${accountType}`, accountId)
-
-      return { disabled: true, reason: updates.autoDisabledReason }
-    } catch (error) {
-      logger.error(`❌ [Auto Disable] Failed to disable account ${accountId}:`, error)
-      return { disabled: false, error: error.message }
-    }
+    return { disabled: false, reason: 'auto_disable_disabled' }
   }
 
   /**
