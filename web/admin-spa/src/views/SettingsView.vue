@@ -1222,7 +1222,6 @@
         <!-- 模型价格部分 -->
         <div v-show="activeSection === 'modelPricing'">
           <ModelPricingSection />
-
         </div>
       </div>
     </div>
@@ -1955,9 +1954,6 @@ const serviceRates = ref({
 
 // 定价数据配置
 const pricingLoading = ref(false)
-const pricingRefreshing = ref(false)
-const pricingSearchQuery = ref('')
-const pricingProviderFilter = ref('')
 const pricingData = ref({
   status: {
     initialized: false,
@@ -2362,93 +2358,6 @@ const loadPricingData = async () => {
       pricingLoading.value = false
     }
   }
-}
-
-// 刷新定价数据
-const refreshPricing = async () => {
-  if (!isMounted.value) return
-  pricingRefreshing.value = true
-  try {
-    const response = await httpApis.refreshAdminPricingApi({
-      signal: abortController.value.signal
-    })
-    if (isMounted.value) {
-      if (response.success) {
-        showToast('定价数据已更新', 'success')
-        // 重新加载定价数据
-        await loadPricingData()
-      } else {
-        showToast(response.message || '更新定价数据失败', 'warning')
-      }
-    }
-  } catch (error) {
-    if (error.name === 'AbortError') return
-    if (!isMounted.value) return
-    showToast('更新定价数据失败', 'error')
-    console.error(error)
-  } finally {
-    if (isMounted.value) {
-      pricingRefreshing.value = false
-    }
-  }
-}
-
-// 定价相关计算属性
-const uniqueProviders = computed(() => {
-  const providers = new Set()
-  for (const model of pricingData.value.models || []) {
-    if (model.provider) {
-      providers.add(model.provider)
-    }
-  }
-  return Array.from(providers).sort()
-})
-
-const filteredPricingModels = computed(() => {
-  let models = pricingData.value.models || []
-
-  // 按搜索词过滤
-  if (pricingSearchQuery.value) {
-    const query = pricingSearchQuery.value.toLowerCase()
-    models = models.filter((m) => m.model.toLowerCase().includes(query))
-  }
-
-  // 按提供商过滤
-  if (pricingProviderFilter.value) {
-    models = models.filter((m) => m.provider === pricingProviderFilter.value)
-  }
-
-  return models
-})
-
-// 格式化价格显示
-const formatPrice = (price) => {
-  if (price === null || price === undefined) {
-    return '-'
-  }
-  if (price === 0) {
-    return '$0'
-  }
-  if (price < 0.01) {
-    return `$${price.toFixed(4)}`
-  }
-  if (price < 1) {
-    return `$${price.toFixed(3)}`
-  }
-  return `$${price.toFixed(2)}`
-}
-
-// 提供商样式类
-const getProviderClass = (provider) => {
-  const classes = {
-    anthropic: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
-    openai: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
-    google: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
-    meta: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300',
-    mistral: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300',
-    deepseek: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-300'
-  }
-  return classes[provider] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
 }
 
 // 保存服务倍率配置
